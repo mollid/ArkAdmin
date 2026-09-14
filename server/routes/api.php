@@ -1,17 +1,13 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Admin\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-
-/*
- * 管理端路由组：统一挂载 /api/admin 前缀。
- * 登录/鉴权于 Task 8 重写（Sanctum + spatie-permission）。
- */
 Route::prefix('admin')->group(function () {
-    // Task 4 探针路由（Task 8 重写该文件时移除）
-    Route::post('__probe', fn (Request $r) => $r->validate(['name' => 'required']));
+    Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+
+    Route::middleware('auth:admin')->group(function () {
+        Route::get('auth/me', [AuthController::class, 'me']);
+        Route::delete('auth/logout', [AuthController::class, 'logout']);
+    });
 });

@@ -49,7 +49,8 @@ class EnvelopeTest extends TestCase
 
     public function test_renders_validation_exception_as_envelope(): void
     {
-        $resp = $this->postJson('/api/admin/__probe');
+        // 原 Task 4 __probe 探针已在 Task 8 移除；改用真实登录路由的必填校验验证异常信封渲染
+        $resp = $this->postJson('/api/admin/auth/login');
 
         $resp->assertStatus(422);
         $this->assertSame(422, $resp->json('code'));

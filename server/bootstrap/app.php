@@ -3,8 +3,9 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\Gate;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -28,3 +29,12 @@ return Application::configure(basePath: dirname(__DIR__))
             return $envelope($e->getStatusCode(), $e->getMessage() ?: '请求错误');
         });
     })->create();
+
+// 超管旁路：super_admin 角色通过任何 Gate 检查（Laravel v13 无 withGate，以 booting 钩子等效注册）
+$app->booting(function () {
+    Gate::before(function ($user, string $ability) {
+        return $user instanceof \App\Admin\Models\Admin && $user->hasRole('super_admin') ? true : null;
+    });
+});
+
+return $app;

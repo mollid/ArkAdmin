@@ -15,5 +15,16 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $envelope = fn (int $code, string $msg, $data = null) => response()->json(
+            ['code' => $code, 'data' => $data, 'msg' => $msg], $code === 401 ? 401 : ($code === 422 ? 422 : 200)
+        );
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) use ($envelope) {
+            return $envelope(401, $e->getMessage() ?: '未登录或登录已过期');
+        });
+        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) use ($envelope) {
+            return $envelope(422, $e->getMessage(), $e->errors());
+        });
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, $request) use ($envelope) {
+            return $envelope($e->getStatusCode(), $e->getMessage() ?: '请求错误');
+        });
     })->create();

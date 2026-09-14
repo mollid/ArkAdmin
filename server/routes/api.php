@@ -12,5 +12,6 @@ Route::get('/user', function (Request $request) {
  * 登录/鉴权于 Task 8 重写（Sanctum + spatie-permission）。
  */
 Route::prefix('admin')->group(function () {
-    // placeholder: Task 4 探针路由与 Task 8 管理端路由在此注册
+    // Task 4 探针路由（Task 8 重写该文件时移除）
+    Route::post('__probe', fn (Request $r) => $r->validate(['name' => 'required']));
 });

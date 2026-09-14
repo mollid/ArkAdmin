@@ -1,0 +1,43 @@
+name: arkadmin
+
+services:
+  nginx:
+    image: docker.1panel.live/library/nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ..:/var/www:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    restart: unless-stopped
+
+  php:
+    build: .
+    volumes:
+      - ..:/var/www
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: docker.1panel.live/library/postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: arkadmin
+      POSTGRES_PASSWORD: arkadmin_db
+      POSTGRES_DB: arkadmin
+      TZ: Asia/Shanghai
+    volumes:
+      - arkadmin-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkadmin -d arkadmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  arkadmin-pg-data:

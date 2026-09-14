@@ -4,6 +4,7 @@ namespace App\Admin\Http\Controllers;
 
 use App\Admin\Models\Menu;
 use App\Support\Http\Traits\ApiResponse;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -88,7 +89,12 @@ class MenuController extends Controller
             ? \Illuminate\Validation\Rule::unique('menus', 'name')->ignore($ignoreId)
             : 'unique:menus,name';
         $data = $request->validate([
-            'parent_id' => 'nullable|integer|exists:menus,id',
+            // 0 = 挂根（顶级菜单）：exists 规则无对应行必 422，闭包放行 0、其余须存在
+            'parent_id' => ['nullable', 'integer', function (string $attribute, $value, Closure $fail) {
+                if ((int) $value !== 0 && !Menu::where('id', $value)->exists()) {
+                    $fail('父级菜单不存在');
+                }
+            }],
             'name' => ['required', 'string', 'max:64', $unique],
             'title' => 'required|string|max:64',
             'icon' => 'nullable|string|max:64',

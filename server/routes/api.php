@@ -2,6 +2,7 @@
 
 use App\Admin\Http\Controllers\AdminController;
 use App\Admin\Http\Controllers\AuthController;
+use App\Admin\Http\Controllers\MenuController;
 use App\Admin\Http\Controllers\RoleController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,5 +23,10 @@ Route::prefix('admin')->group(function () {
         Route::post('roles', [RoleController::class, 'store'])->middleware('permission:system.role.store');
         Route::put('roles/{role}', [RoleController::class, 'update'])->middleware('permission:system.role.update');
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:system.role.destroy');
+
+        Route::get('menus', [MenuController::class, 'index'])->middleware('permission:system.menu.index');
+        Route::post('menus', [MenuController::class, 'store'])->middleware('permission:system.menu.store');
+        Route::put('menus/{menu}', [MenuController::class, 'update'])->middleware('permission:system.menu.update');
+        Route::delete('menus/{menu}', [MenuController::class, 'destroy'])->middleware('permission:system.menu.destroy');
     });
 });

@@ -11,6 +11,7 @@ export interface MenuItem {
   id: number; parent_id: number; name: string; title: string; icon: string
   route_path: string; view_path: string; permission: string; addon_key: string
   sort: number; children: MenuItem[]
+  is_show?: boolean // 菜单管理接口（/menus）返回；/auth/me 的过滤后菜单树不含
 }
 
 export const authApi = {

@@ -18,11 +18,16 @@ class AdminController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = Admin::query()
+            ->with('roles')
             ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike', '%' . $request->input('username') . '%'))
             ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike', '%' . $request->input('name') . '%'))
             ->orderByDesc('id');
 
-        return $this->paginate($q->paginate((int) $request->input('per_page', 15)));
+        // 编辑回填契约：每行附 roles（角色 id 数组）——覆盖预载的 Role 模型集合，避免序列化出完整角色对象
+        return $this->paginate(
+            $q->paginate((int) $request->input('per_page', 15))
+                ->through(fn (Admin $a) => $a->setRelation('roles', $a->roles->pluck('id')))
+        );
     }
 
     public function store(AdminStoreRequest $request): JsonResponse

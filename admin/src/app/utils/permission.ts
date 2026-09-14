@@ -1,4 +1,11 @@
 import type { Directive } from 'vue'
+import { useUserStore } from '../stores/user'
 
-// 占位实现：Task 13 将重写为真实权限指令（基于 user store 的 permissions 判断）
-export const permissionDirective: Directive = {}
+export const permissionDirective: Directive<HTMLElement, string> = {
+  mounted(el, binding) {
+    const store = useUserStore()
+    if (binding.value && !store.has(binding.value)) {
+      el.parentNode?.removeChild(el)
+    }
+  },
+}

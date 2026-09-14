@@ -19,3 +19,6 @@ admin/dist/
 *.log
 storage/*.key
 .superpowers/
+
+# tinker psysh 运行时目录
+.config/

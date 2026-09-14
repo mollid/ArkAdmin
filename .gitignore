@@ -18,3 +18,4 @@ admin/dist/
 # 日志与运行时
 *.log
 storage/*.key
+.superpowers/

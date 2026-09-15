@@ -6,7 +6,7 @@ const appViews = import.meta.glob('/src/app/views/**/*.vue')
 
 export const Layout = () => import('@/app/views/layout/index.vue')
 
-export function mapMenusToRoutes(menus: MenuItem[]): RouteRecordRaw[] {
+export function mapMenusToRoutes(menus: MenuItem[], topLevel = true): RouteRecordRaw[] {
   const routes: RouteRecordRaw[] = []
   for (const m of menus) {
     if (m.children?.length) {
@@ -15,17 +15,29 @@ export function mapMenusToRoutes(menus: MenuItem[]): RouteRecordRaw[] {
         // 目录型路由也带 name，logout 时按 name 逐个移除
         name: m.name,
         component: Layout,
-        children: mapMenusToRoutes(m.children),
+        children: mapMenusToRoutes(m.children, false),
       })
     } else if (m.view_path) {
       const key = `/src/app/views/${m.view_path}.vue`
-      routes.push({
-        path: m.route_path || `/${m.name}`,
-        name: m.name,
-        component: (appViews as Record<string, () => Promise<unknown>>)[key]
-          ?? (() => import('@/app/views/missing/index.vue')),
-        meta: { title: m.title },
-      })
+      const view = (appViews as Record<string, () => Promise<unknown>>)[key]
+        ?? (() => import('@/app/views/missing/index.vue'))
+      // 顶级叶子（如控制台）也要包进 Layout，否则整页是裸视图、没有侧边栏；
+      // 非顶级叶子已在祖先的 Layout 内，再包会 Layout 套 Layout
+      routes.push(
+        topLevel
+          ? {
+              path: m.route_path || `/${m.name}`,
+              name: m.name,
+              component: Layout,
+              children: [{ path: '', component: view, meta: { title: m.title } }],
+            }
+          : {
+              path: m.route_path || `/${m.name}`,
+              name: m.name,
+              component: view,
+              meta: { title: m.title },
+            },
+      )
     }
   }
   return routes

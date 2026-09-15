@@ -2,11 +2,11 @@
   <div class="login-wrap">
     <el-card class="login-card">
       <h2>{{ t('app.title') }}</h2>
-      <el-form :model="form" @keyup.enter="submit">
-        <el-form-item>
+      <el-form ref="formRef" :model="form" :rules="rules" hide-required-asterisk @keyup.enter="submit">
+        <el-form-item prop="username">
           <el-input v-model="form.username" :placeholder="t('login.username')" size="large" />
         </el-form-item>
-        <el-form-item>
+        <el-form-item prop="password">
           <el-input v-model="form.password" type="password" :placeholder="t('login.password')" size="large" show-password />
         </el-form-item>
         <el-button type="primary" size="large" style="width:100%" :loading="loading" @click="submit">
@@ -19,6 +19,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../../stores/user'
@@ -27,10 +28,17 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useUserStore()
 const loading = ref(false)
+const formRef = ref<FormInstance>()
 const form = reactive({ username: '', password: '' })
 
+const rules: FormRules = {
+  username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }],
+}
+
 async function submit() {
-  if (!form.username || !form.password) return
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   loading.value = true
   try {
     await store.login(form.username, form.password)

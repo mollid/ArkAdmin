@@ -33,7 +33,9 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: () => import('@/app/views/login/index.vue') },
-    { path: '/:pathMatch(.*)*', name: 'notfound', redirect: '/dashboard' },
+    // 注意：catch-all 不能 redirect 到动态注册的路由——redirect 在守卫之前解析，
+    // 动态路由注册前会无限递归；必须渲染真实组件让 beforeEach 有机会执行
+    { path: '/:pathMatch(.*)*', name: 'notfound', component: () => import('@/app/views/notfound/index.vue') },
   ],
 })
 
@@ -41,13 +43,16 @@ router.beforeEach(async (to) => {
   const store = useUserStore()
   if (to.path === '/login') return true
   if (!store.token) return { path: '/login' }
+  if (to.path === '/') return { path: '/dashboard', replace: true }
   if (!store.routesAdded) {
     await store.fetchMe()
     for (const r of mapMenusToRoutes(store.menus)) {
       router.addRoute(r)
     }
     store.routesAdded = true
-    return { ...to, replace: true }
+    // 必须构造全新 location：扩散 to 会带上 catch-all 的 name/params，
+    // 按 name 解析会再次命中 catch-all
+    return { path: to.path, query: to.query, hash: to.hash, replace: true }
   }
   return true
 })

@@ -32,7 +32,10 @@ abstract class AddonServiceProvider extends ServiceProvider
     public function boot(): void
     {
         foreach ($this->listen as $event => $listeners) {
-            Event::listen($event, $listeners);
+            // 逐个注册字符串类名（自动解析 handle 方法）；整组数组会被当作 [class, method] 解析
+            foreach ((array) $listeners as $listener) {
+                Event::listen($event, $listener);
+            }
         }
         $this->mountRoutes();
     }

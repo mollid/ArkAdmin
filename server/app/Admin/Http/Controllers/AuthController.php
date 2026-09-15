@@ -2,6 +2,7 @@
 
 namespace App\Admin\Http\Controllers;
 
+use App\Admin\Events\AdminLoginSuccessed;
 use App\Admin\Models\Admin;
 use App\Admin\Services\MenuService;
 use App\Support\Http\Traits\ApiResponse;
@@ -34,6 +35,10 @@ class AuthController extends Controller
         }
 
         $token = $admin->createToken('admin')->plainTextToken;
+
+        // §5.5 埋点：登录成功。插件可监听（框架公开接口，删除视为破坏性变更）
+        event(new AdminLoginSuccessed($admin));
+
         return $this->success([
             'token' => $token,
             'admin' => ['id' => $admin->id, 'username' => $admin->username, 'name' => $admin->name],

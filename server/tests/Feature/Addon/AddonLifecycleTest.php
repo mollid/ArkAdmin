@@ -31,13 +31,13 @@ it('安装 demo：注册表/业务表/菜单/权限齐备且接口可用', funct
         ->and(Permission::where('module', 'demo')->pluck('name'))
         ->toContain('addon.demo.note.index', 'addon.demo.note.store');
 
-    $token = admin_token();
+    $token = admin_token(); // 登录事件本身会写入一条 login:admin 便签
     $this->getJson('/api/admin/addon/demo/notes', ['Authorization' => "Bearer {$token}"])
-        ->assertOk()->assertJsonPath('code', 0)->assertJsonPath('data.list', []);
+        ->assertOk()->assertJsonPath('code', 0);
     $this->postJson('/api/admin/addon/demo/notes', ['content' => 'hello'],
         ['Authorization' => "Bearer {$token}"])
         ->assertOk()->assertJsonPath('code', 0);
-    expect(DB::table('demo_notes')->count())->toBe(1);
+    expect(DB::table('demo_notes')->count())->toBe(2);
 });
 
 it('超管菜单树出现插件菜单，无权限管理员看不到', function () {

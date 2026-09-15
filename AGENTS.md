@@ -2,13 +2,13 @@
 
 ## 工作区定位
 
-本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 12 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架完成：docker 环境、后端登录/RBAC/菜单接口、前端 SPA 三大系统管理页面），设计文档与两个只读参考仓库并存。
+本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 13 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架完成：docker 环境、后端登录/RBAC/菜单接口、前端 SPA 三大系统管理页面），设计文档与两个只读参考仓库并存。
 
 ```
 /home/gdmax/fastadmin/            # 工作区根（git 仓库根）
 ├── AGENTS.md                     # 本文件
 ├── docs/superpowers/specs/       # ArkAdmin 设计文档（先读这个）
-├── server/                       # ArkAdmin 后端（Laravel 12 + Sanctum + spatie-permission）
+├── server/                       # ArkAdmin 后端（Laravel 13 + Sanctum + spatie-permission）
 ├── admin/                        # ArkAdmin 前端（Vue3 + TS + Element Plus + Vite SPA）
 ├── docker/                       # 开发环境编排（php8.3-fpm / nginx / postgres16）
 ├── fastadmin/                    # 参考仓库 1：FastAdmin（Apache-2.0）

@@ -13,6 +13,15 @@ $app = Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withProviders([\App\Providers\AddonBootServiceProvider::class])
+    ->withCommands([
+        \App\Support\Addon\Console\AddonListCommand::class,
+        \App\Support\Addon\Console\AddonInstallCommand::class,
+        \App\Support\Addon\Console\AddonUninstallCommand::class,
+        \App\Support\Addon\Console\AddonEnableCommand::class,
+        \App\Support\Addon\Console\AddonDisableCommand::class,
+        \App\Support\Addon\Console\AddonCacheCommand::class,
+        \App\Support\Addon\Console\AddonClearCommand::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         // API-only：未认证请求不做 web 登录跳转（默认 redirectGuestsTo(route('login')) 会因无该路由抛 500）
         $middleware->redirectGuestsTo(null);

@@ -58,3 +58,15 @@ it('allows parent_id=0 for top-level menus', function () {
         'route_path' => '/dashboard', 'view_path' => 'dashboard/index', 'permission' => '', 'sort' => 0, 'is_show' => true,
     ])->assertOk();
 });
+
+it('rolls back the whole subtree when recursive deletion fails midway', function () {
+    $top = Menu::create(['parent_id' => 0, 'name' => 'top', 'title' => '顶', 'sort' => 0, 'is_show' => true]);
+    $mid = Menu::create(['parent_id' => $top->id, 'name' => 'mid', 'title' => '中', 'sort' => 0, 'is_show' => true]);
+    Menu::create(['parent_id' => $mid->id, 'name' => 'leaf', 'title' => '叶', 'sort' => 0, 'is_show' => true]);
+
+    // 中间节点删除时抛异常：无事务时叶子已被物理删除、链路残缺
+    Menu::deleting(fn (Menu $m) => $m->name === 'mid' ? throw new \RuntimeException('boom') : null);
+
+    $this->withToken($this->token)->deleteJson("/api/admin/menus/{$top->id}")->assertStatus(500);
+    expect(Menu::whereIn('name', ['top', 'mid', 'leaf'])->count())->toBe(3);
+});

@@ -14,6 +14,9 @@ class AuthController extends Controller
 {
     use ApiResponse;
 
+    /** 固定哑哈希（bcrypt cost 12，与真实密码同代价）：用户不存在时也执行一次校验，抹平 timing 侧信道 */
+    protected const DUMMY_HASH = '$2y$12$f2OhRXatTetFECYXJ1gkJ./KQRj8CjDihwfffLNNnjcj5sbTxRcae';
+
     public function login(Request $request): JsonResponse
     {
         $request->validate([
@@ -22,7 +25,8 @@ class AuthController extends Controller
         ]);
 
         $admin = Admin::where('username', $request->input('username'))->first();
-        if (!$admin || !Hash::check($request->input('password'), $admin->password)) {
+        $passwordOk = Hash::check($request->input('password'), $admin?->password ?? self::DUMMY_HASH);
+        if (!$admin || !$passwordOk) {
             return $this->fail(1, '用户名或密码错误');
         }
         if ($admin->status !== 1) {

@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 
 class MenuController extends Controller
 {
@@ -53,10 +54,10 @@ class MenuController extends Controller
     public function destroy(int $menu): JsonResponse
     {
         $model = Menu::findOrFail($menu);
-        foreach ($model->children()->get() as $child) {
-            $this->deleteRecursive($child);
-        }
-        $model->delete();
+        // 递归删除须整体成功或整体回滚：中途失败不能留下残缺子树
+        DB::transaction(function () use ($model) {
+            $this->deleteRecursive($model);
+        });
         return $this->success(null, '删除成功');
     }
 

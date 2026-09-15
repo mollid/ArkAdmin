@@ -35,3 +35,27 @@ it('cannot update super_admin name', function () {
     $this->withToken($this->token)->putJson("/api/admin/roles/{$id}", ['name' => 'hax'])
         ->assertOk()->assertJsonPath('code', 1);
 });
+
+it('allows same role name under another guard', function () {
+    Role::create(['name' => 'dup', 'guard_name' => 'web']);
+    $this->withToken($this->token)->postJson('/api/admin/roles', ['name' => 'dup'])->assertOk();
+    expect(Role::where('name', 'dup')->where('guard_name', 'admin')->exists())->toBeTrue();
+});
+
+it('rejects permissions belonging to another guard', function () {
+    \Spatie\Permission\Models\Permission::create(['name' => 'web.perm', 'guard_name' => 'web']);
+    $this->withToken($this->token)->postJson('/api/admin/roles', [
+        'name' => 'r2', 'permissions' => ['web.perm'],
+    ])->assertStatus(422);
+});
+
+it('rolls back user detach when role deletion fails', function () {
+    $role = Role::create(['name' => 'boom', 'guard_name' => 'admin']);
+    $holder = \App\Admin\Models\Admin::create(['username' => 'holder', 'password' => 'x123456', 'status' => 1]);
+    $holder->assignRole($role);
+
+    Role::deleting(fn ($r) => $r->name === 'boom' ? throw new \RuntimeException('boom') : null);
+
+    $this->withToken($this->token)->deleteJson("/api/admin/roles/{$role->id}")->assertStatus(500);
+    expect($holder->refresh()->hasRole('boom'))->toBeTrue();
+});

@@ -21,6 +21,14 @@ it('rejects wrong password with envelope', function () {
     $r->assertOk()->assertJsonPath('code', 1);
 });
 
+// timing 侧信道抹平：用户不存在时也必须执行一次同代价的哈希校验
+it('runs a hash check even when the user does not exist', function () {
+    \Illuminate\Support\Facades\Hash::shouldReceive('check')->atLeast()->once()->andReturn(false);
+
+    $r = $this->postJson('/api/admin/auth/login', ['username' => 'ghost', 'password' => 'whatever']);
+    $r->assertOk()->assertJsonPath('code', 1);
+});
+
 it('me returns menus and permissions for super admin', function () {
     $token = $this->postJson('/api/admin/auth/login', ['username' => 'admin', 'password' => '123456'])
         ->json('data.token');

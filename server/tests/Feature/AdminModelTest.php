@@ -13,3 +13,8 @@ it('hides password in array', function () {
     $a = Admin::create(['username' => 't2', 'password' => 'secret123', 'status' => 1]);
     expect($a->toArray())->not->toHaveKey('password');
 });
+
+it('casts status to int', function () {
+    $a = Admin::create(['username' => 't3', 'password' => 'secret123', 'status' => '1']);
+    expect($a->status)->toBeInt()->toBe(1);
+});

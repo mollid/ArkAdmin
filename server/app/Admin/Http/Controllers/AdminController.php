@@ -17,10 +17,15 @@ class AdminController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+        // PG 的 LIKE 默认转义符是反斜杠；用户输入中的 %/_/\ 须转义为字面量，否则成为通配符
+        $like = fn (string $v) => '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $v) . '%';
         $q = Admin::query()
             ->with('roles')
-            ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike', '%' . $request->input('username') . '%'))
-            ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike', '%' . $request->input('name') . '%'))
+            ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike', $like($request->input('username'))))
+            ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike', $like($request->input('name'))))
             ->orderByDesc('id');
 
         // 编辑回填契约：每行附 roles（角色 id 数组）——覆盖预载的 Role 模型集合，避免序列化出完整角色对象
@@ -45,6 +50,10 @@ class AdminController extends Controller
         $data = $request->validated();
         if (empty($data['password'])) {
             unset($data['password']);
+        }
+        // username 显式 null 与空密码同语义：不修改
+        if (array_key_exists('username', $data) && $data['username'] === null) {
+            unset($data['username']);
         }
         $model->update($data);
         $roles = Role::where('guard_name', 'admin')->whereIn('id', $data['roles'] ?? [])->get();

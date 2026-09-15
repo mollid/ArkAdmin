@@ -6,6 +6,7 @@ use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -35,9 +36,9 @@ class RoleController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name' => 'required|string|max:64|unique:roles,name',
+            'name' => ['required', 'string', 'max:64', Rule::unique('roles', 'name')->where('guard_name', 'admin')],
             'permissions' => 'nullable|array',
-            'permissions.*' => 'string|exists:permissions,name',
+            'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'admin')],
         ]);
         $role = Role::create(['name' => $data['name'], 'guard_name' => 'admin']);
         $role->syncPermissions($data['permissions'] ?? []);
@@ -51,9 +52,9 @@ class RoleController extends Controller
             return $this->fail(1, '超级管理员角色不可修改');
         }
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:64', Rule::unique('roles', 'name')->ignore($model->id)],
+            'name' => ['required', 'string', 'max:64', Rule::unique('roles', 'name')->ignore($model->id)->where('guard_name', 'admin')],
             'permissions' => 'nullable|array',
-            'permissions.*' => 'string|exists:permissions,name',
+            'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'admin')],
         ]);
         $model->update(['name' => $data['name']]);
         $model->syncPermissions($data['permissions'] ?? []);
@@ -66,8 +67,10 @@ class RoleController extends Controller
         if ($model->name === 'super_admin') {
             return $this->fail(1, '超级管理员角色不可删除');
         }
-        $model->users()->detach();
-        $model->delete();
+        DB::transaction(function () use ($model) {
+            $model->users()->detach();
+            $model->delete();
+        });
         return $this->success(null, '删除成功');
     }
 }

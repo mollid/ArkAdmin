@@ -18,7 +18,8 @@ class MenuService
 
         $visible = Menu::orderBy('sort')->get()
             ->filter(fn (Menu $m) => $m->is_show)
-            ->filter(fn (Menu $m) => $perms === null || $m->permission === '' || $perms->has($m->permission))
+            // permission 为空串（或防御性地为 null）表示无权限要求；in_array 严格比较避免 '0' 被 PHP 判空
+            ->filter(fn (Menu $m) => $perms === null || in_array($m->permission, ['', null], true) || $perms->has($m->permission))
             ->values();
 
         return $this->nest($visible, 0);

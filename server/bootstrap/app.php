@@ -12,6 +12,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withProviders([\App\Providers\AddonBootServiceProvider::class])
     ->withMiddleware(function (Middleware $middleware): void {
         // API-only：未认证请求不做 web 登录跳转（默认 redirectGuestsTo(route('login')) 会因无该路由抛 500）
         $middleware->redirectGuestsTo(null);

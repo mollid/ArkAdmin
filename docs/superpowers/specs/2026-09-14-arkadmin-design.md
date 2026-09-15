@@ -186,7 +186,7 @@ php artisan addon:enable|disable {name}
 3. 对 enabled 插件：注册其 `AddonServiceProvider`（框架引导时注册 `Addons\` 前缀 PSR-4 自动加载器，映射 `Addons\<key>\` → `addons/<key>/src/`，插件作者无需任何 composer 配置；M2 实现勘误，原"根 composer.json psr-4 覆盖"方案无法覆盖 src/ 布局）
 4. 插件 Provider 内完成：挂载路由（自动前缀 `/api/admin/addon/<key>` + 中间件组）、注册事件监听、注册菜单渲染数据源
 
-性能：enabled 插件清单与事件监听映射写入缓存（`php artisan addon:cache`），生产环境免每次磁盘扫描；`config:cache`/`route:cache` 兼容性在 M2 验证。
+性能：enabled 插件清单（目录 + provider 类名）写入缓存（`php artisan addon:cache`），生产环境免每次启动查库扫盘；监听注册由各插件 provider 在 boot 时完成、不入缓存（M2 实现决策：无人消费的映射会变成说谎的元数据）；`config:cache`/`route:cache` 兼容性在 M2 验证。
 
 ### 6.5 菜单注入与清除
 

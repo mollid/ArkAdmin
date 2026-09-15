@@ -31,6 +31,12 @@ it('安装 demo：注册表/业务表/菜单/权限齐备且接口可用', funct
         ->and(Permission::where('module', 'demo')->pluck('name'))
         ->toContain('addon.demo.note.index', 'addon.demo.note.store');
 
+    // RbacSeeder 语义（超管=全部权限）必须在插件安装时延续：新权限 sync 给 super_admin，
+    // 否则前端 has() 字符串检查看不到新权限、按钮级权限失效（接口有 Gate::before 旁路不受影响）
+    $super = \Spatie\Permission\Models\Role::where('name', 'super_admin')
+        ->where('guard_name', 'admin')->first();
+    expect($super->hasPermissionTo('addon.demo.note.store'))->toBeTrue();
+
     $token = admin_token(); // 登录事件本身会写入一条 login:admin 便签
     $this->getJson('/api/admin/addon/demo/notes', ['Authorization' => "Bearer {$token}"])
         ->assertOk()->assertJsonPath('code', 0);

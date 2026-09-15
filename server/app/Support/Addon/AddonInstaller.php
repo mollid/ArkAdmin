@@ -40,18 +40,24 @@ class AddonInstaller
         }
 
         Artisan::call('migrate', ['--path' => $info->migrationPath(), '--realpath' => true, '--force' => true]);
-        $record = Addon::create([
-            'name' => $info->name,
-            'title' => $info->title,
-            'version' => $info->version,
-            'enabled' => true,
-            'install_time' => now(),
-        ]);
-        $permissions = $this->syncMenus($info);
-        $this->createPermissions($info, array_values(array_unique(array_merge(
-            $permissions, $this->declaredPermissions($info)
-        ))));
-        $this->hook($info, 'install');
+        // 迁移在事务外：失败自愈（重试时 migrate 幂等空转）；其后任一步失败，
+        // 注册表随事务回滚，避免留下"已注册但无菜单/权限"的半安装态（重装被"已安装"挡死）
+        $record = DB::transaction(function () use ($info) {
+            $record = Addon::create([
+                'name' => $info->name,
+                'title' => $info->title,
+                'version' => $info->version,
+                'enabled' => true,
+                'install_time' => now(),
+            ]);
+            $permissions = $this->syncMenus($info);
+            $this->createPermissions($info, array_values(array_unique(array_merge(
+                $permissions, $this->declaredPermissions($info)
+            ))));
+            $this->hook($info, 'install');
+
+            return $record;
+        });
         $this->finish($info);
 
         return $record;
@@ -143,6 +149,14 @@ class AddonInstaller
                 if (! isset($node[$field]) || $node[$field] === '') {
                     throw new AddonException("插件 [{$info->name}] 菜单定义缺少字段 {$field}");
                 }
+            }
+            // menus.name 全局唯一：已被系统或其它插件占用的名字必须拒绝，
+            // 否则 updateOrCreate 会改写他人菜单（addon_key 换主），卸载时再把它删掉
+            $occupied = Menu::where('name', $node['name'])
+                ->where('addon_key', '!=', $info->name)
+                ->exists();
+            if ($occupied) {
+                throw new AddonException("插件 [{$info->name}] 菜单名 [{$node['name']}] 已被系统或其它插件占用");
             }
             $menu = Menu::updateOrCreate(['name' => $node['name']], [
                 'parent_id' => $parentId,

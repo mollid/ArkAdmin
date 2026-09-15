@@ -244,9 +244,25 @@ class AddonInstaller
             return;
         }
         $listen = (new \ReflectionClass($class))->getDefaultProperties()['listen'] ?? [];
-        foreach (array_keys($listen) as $event) {
-            // v1 框架事件尚无自有监听者，按事件整体摘除；引入自有监听者时改为逐监听器摘除
+        $events = array_keys($listen);
+        if ($events === []) {
+            return;
+        }
+        foreach ($events as $event) {
             Event::forget($event);
+        }
+        // Event::forget 是按事件整体摘除，会把监听同一事件的兄弟插件一起杀掉，
+        // 从其它启用插件的 listen 映射重挂幸存者（本插件已 enabled=false，不在其中）
+        foreach ($this->manager->enabledInfos() as $other) {
+            if ($other->name === $info->name || ! class_exists($other->providerClass())) {
+                continue;
+            }
+            $otherListen = (new \ReflectionClass($other->providerClass()))->getDefaultProperties()['listen'] ?? [];
+            foreach ($events as $event) {
+                foreach ((array) ($otherListen[$event] ?? []) as $listener) {
+                    Event::listen($event, $listener);
+                }
+            }
         }
     }
 

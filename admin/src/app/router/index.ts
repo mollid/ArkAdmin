@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import type { MenuItem } from '../api/auth'
 import { useUserStore } from '../stores/user'
+import { resolveView } from './resolveView'
 
-const appViews = import.meta.glob('/src/app/views/**/*.vue')
+export { missingView, resolveView } from './resolveView'
+export type { ViewMap } from './resolveView'
 
 export const Layout = () => import('@/app/views/layout/index.vue')
 
@@ -18,9 +20,7 @@ export function mapMenusToRoutes(menus: MenuItem[], topLevel = true): RouteRecor
         children: mapMenusToRoutes(m.children, false),
       })
     } else if (m.view_path) {
-      const key = `/src/app/views/${m.view_path}.vue`
-      const view = (appViews as Record<string, () => Promise<unknown>>)[key]
-        ?? (() => import('@/app/views/missing/index.vue'))
+      const view = resolveView(m)
       // 顶级叶子（如控制台）也要包进 Layout，否则整页是裸视图、没有侧边栏；
       // 非顶级叶子已在祖先的 Layout 内，再包会 Layout 套 Layout
       routes.push(

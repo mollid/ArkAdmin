@@ -118,7 +118,7 @@ arkadmin/
 ```
 addons/cms/
 ├── info.json                # 清单
-├── src/                     # PHP（命名空间 Addons\Cms\）
+├── src/                     # PHP（命名空间 Addons\<key>\，全小写与目录名一致）
 │   ├── AddonServiceProvider.php
 │   ├── Addon.php            # 实现 ArkAdmin\Support\Addon\Contracts\Lifecycle
 │   ├── Http/Controllers/
@@ -183,7 +183,7 @@ php artisan addon:enable|disable {name}
 
 1. 扫描 `addons/*/info.json`，得磁盘插件清单
 2. 读取 `addons` 注册表，标记 installed/enabled
-3. 对 enabled 插件：注册其 `AddonServiceProvider`（插件命名空间 `Addons\` 已由根 composer.json 的 psr-4 映射覆盖，无需动态 autoload）
+3. 对 enabled 插件：注册其 `AddonServiceProvider`（框架引导时注册 `Addons\` 前缀 PSR-4 自动加载器，映射 `Addons\<key>\` → `addons/<key>/src/`，插件作者无需任何 composer 配置；M2 实现勘误，原"根 composer.json psr-4 覆盖"方案无法覆盖 src/ 布局）
 4. 插件 Provider 内完成：挂载路由（自动前缀 `/api/admin/addon/<key>` + 中间件组）、注册事件监听、注册菜单渲染数据源
 
 性能：enabled 插件清单与事件监听映射写入缓存（`php artisan addon:cache`），生产环境免每次磁盘扫描；`config:cache`/`route:cache` 兼容性在 M2 验证。

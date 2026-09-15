@@ -1,7 +1,7 @@
 <template>
   <el-card>
     <h2>{{ store.adminInfo?.name }}，欢迎回来</h2>
-    <p>ArkAdmin M1 · Laravel 12 + Vue 3 + Element Plus</p>
+    <p>ArkAdmin M1 · Laravel 13 + Vue 3 + Element Plus</p>
   </el-card>
 </template>
 

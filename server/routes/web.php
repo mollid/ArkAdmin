@@ -1,7 +1,3 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return view('welcome');
-});
+// API-only 后端：无 web 路由（骨架 welcome 路由与视图已移除）

@@ -29,6 +29,11 @@ it('runs a hash check even when the user does not exist', function () {
     $r->assertOk()->assertJsonPath('code', 1);
 });
 
+// 无 token 请求必须干净地 401（sanctum 回退 guard 已置空，API-only 不做 session 认证）
+it('rejects tokenless me with 401', function () {
+    $this->getJson('/api/admin/auth/me')->assertStatus(401);
+});
+
 it('me returns menus and permissions for super admin', function () {
     $token = $this->postJson('/api/admin/auth/login', ['username' => 'admin', 'password' => '123456'])
         ->json('data.token');

@@ -2,24 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Admin\Seeds\MenuSeeder;
+use App\Admin\Seeds\RbacSeeder;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
+    // 两个 seeder 均为幂等 upsert/firstOrCreate，可安全重复执行
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        (new RbacSeeder)->run();
+        (new MenuSeeder)->run();
     }
 }

@@ -45,7 +45,7 @@
           <el-input v-model="dialog.form.password" type="password" show-password />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="dialog.form.roles" multiple style="width:100%">
+          <el-select v-model="dialog.form.roles" multiple :disabled="!rolesAvailable" style="width:100%">
             <el-option v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
           </el-select>
         </el-form-item>
@@ -105,15 +105,26 @@ async function save() {
 }
 
 async function remove(row: AdminRow) {
-  await ElMessageBox.confirm(`确认删除管理员 ${row.username}？`, '提示', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(`确认删除管理员 ${row.username}？`, '提示', { type: 'warning' })
+  } catch {
+    return // 用户取消确认
+  }
   await adminApi.destroy(row.id)
   ElMessage.success(t('common.success'))
   load()
 }
 
+const rolesAvailable = ref(true)
+
 onMounted(async () => {
   await load()
-  roles.value = await roleApi.list()
+  try {
+    roles.value = await roleApi.list()
+  } catch {
+    // 无 system.role.index 权限：下拉禁用，编辑时保留该账号原有角色
+    rolesAvailable.value = false
+  }
 })
 </script>
 

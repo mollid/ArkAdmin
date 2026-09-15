@@ -27,7 +27,8 @@ export const useUserStore = defineStore('user', {
       this.menus = resp.menus
     },
     async logout() {
-      try { await authApi.logout() } finally {
+      // token 已失效时接口报 401，本地状态照常清空
+      try { await authApi.logout() } catch { /* 已由拦截器提示 */ } finally {
         this.token = ''
         this.permissions = []
         this.menus = []

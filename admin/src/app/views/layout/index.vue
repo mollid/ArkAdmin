@@ -26,6 +26,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { clearDynamicRoutes } from '../../router'
 import { useUserStore } from '../../stores/user'
 import MenuItem from './components/MenuItem.vue'
 
@@ -33,9 +34,12 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useUserStore()
 
-function onCommand(cmd: string) {
+async function onCommand(cmd: string) {
   if (cmd === 'logout') {
-    store.logout().then(() => router.push('/login'))
+    await store.logout()
+    // 移除已注册的菜单路由，换账号登录时不残留上一账号的菜单
+    clearDynamicRoutes()
+    router.push('/login')
   }
 }
 </script>

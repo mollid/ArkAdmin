@@ -74,7 +74,7 @@ async function load() {
 function openDialog(row?: MenuItem) {
   Object.assign(dialog, {
     visible: true,
-    form: row ? { ...row } : { parent_id: 0, sort: 0, is_show: true } as never,
+    form: row ? { ...row } : { parent_id: 0, sort: 0, is_show: true },
   })
 }
 
@@ -90,7 +90,11 @@ async function save() {
 }
 
 async function remove(row: MenuItem) {
-  await ElMessageBox.confirm(`确认删除菜单 ${row.title}（含子菜单）？`, '提示', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(`确认删除菜单 ${row.title}（含子菜单）？`, '提示', { type: 'warning' })
+  } catch {
+    return // 用户取消确认
+  }
   await menuApi.destroy(row.id)
   ElMessage.success(t('common.success'))
   load()

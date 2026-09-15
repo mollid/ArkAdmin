@@ -82,7 +82,11 @@ async function save() {
 }
 
 async function remove(row: RoleRow) {
-  await ElMessageBox.confirm(`确认删除角色 ${row.name}？`, '提示', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm(`确认删除角色 ${row.name}？`, '提示', { type: 'warning' })
+  } catch {
+    return // 用户取消确认
+  }
   await roleApi.destroy(row.id)
   ElMessage.success(t('common.success'))
   load()

@@ -35,6 +35,8 @@ async function submit() {
   try {
     await store.login(form.username, form.password)
     await router.push('/dashboard')
+  } catch {
+    // 错误提示已由 request 拦截器统一弹出
   } finally {
     loading.value = false
   }

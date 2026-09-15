@@ -89,9 +89,20 @@ class AddonManager
                 logger()->warning("插件 [{$info->name}] 缺少 {$class}，跳过加载");
                 continue;
             }
-            $this->loaded[$class] = true;
-            $this->app->register($class);
+            try {
+                $this->app->register($class);
+                $this->loaded[$class] = true;
+            } catch (\Throwable $e) {
+                // 单个坏插件不允许拖垮整个后台——否则连禁用它的人口都没有
+                logger()->warning("插件 [{$info->name}] 注册失败，已跳过：".$e->getMessage());
+            }
         }
+    }
+
+    /** 安装/启用后进程内即时注册时登记，保持与 boot() 的幂等记账一致 */
+    public function markLoaded(string $providerClass): void
+    {
+        $this->loaded[$providerClass] = true;
     }
 
     /** @return list<AddonInfo> 编译缓存优先，缓存缺失时按注册表现算 */
@@ -134,23 +145,19 @@ class AddonManager
         });
     }
 
-    /** 编译已启用插件清单与监听映射（§6.4 addon:cache），生产免每次启动查库 */
+    /** 编译已启用插件清单（§6.4 addon:cache），生产免每次启动查库。
+     *  监听映射不入缓存：监听注册由各插件 provider 在 boot 时完成，缓存里的映射无人消费只会变成说谎的元数据 */
     public function compile(): void
     {
         $this->registerAutoloader();
         $map = [];
         foreach ($this->enabledInfos() as $info) {
-            $listeners = [];
-            if (class_exists($info->providerClass())) {
-                $listeners = (new \ReflectionClass($info->providerClass()))->getDefaultProperties()['listen'] ?? [];
-            }
             $map[$info->name] = [
                 'name' => $info->name,
                 'title' => $info->title,
                 'version' => $info->version,
                 'dir' => $info->dir,
                 'provider' => $info->providerClass(),
-                'listeners' => $listeners,
             ];
         }
         file_put_contents($this->compiledFile(), "<?php\n\nreturn ".var_export($map, true).";\n");

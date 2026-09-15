@@ -17,8 +17,14 @@ class MenuService
             $perms = $admin->getAllPermissions()->pluck('name')->flip();
         }
 
-        // 禁用插件保留菜单行但不参与渲染（§6.3：仅已启用插件参与菜单渲染）
-        $disabledAddons = Addon::query()->where('enabled', false)->pluck('name')->flip();
+        // 禁用插件保留菜单行但不参与渲染（§6.3：仅已启用插件参与菜单渲染）；
+        // addons 表缺失（手工回滚等异常态）时降级为不过滤，菜单接口不致命
+        $disabledAddons = collect()->flip();
+        try {
+            $disabledAddons = Addon::query()->where('enabled', false)->pluck('name')->flip();
+        } catch (\Illuminate\Database\QueryException $e) {
+            logger()->warning('addons 注册表不可读，禁用插件菜单过滤跳过：'.$e->getMessage());
+        }
 
         $visible = Menu::orderBy('sort')->get()
             ->filter(fn (Menu $m) => $m->is_show)

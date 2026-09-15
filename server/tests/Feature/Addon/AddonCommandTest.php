@@ -47,14 +47,19 @@ it('启用状态执行 uninstall 失败', function () {
 it('support_version 不满足拒绝安装且零副作用', function () {
     make_addon_dir('needhigh', ['support_version' => '99.0.0']);
     config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
-    $this->artisan('addon:install', ['name' => 'needhigh'])->assertExitCode(1);
+    // 断言具体错误消息：确保拒绝发生在版本校验这一步，而非"目录不存在"之类的空转失败
+    $this->artisan('addon:install', ['name' => 'needhigh'])
+        ->expectsOutputToContain('框架版本')
+        ->assertExitCode(1);
     expect(Addon::find('needhigh'))->toBeNull();
 });
 
 it('依赖未安装拒绝安装', function () {
     make_addon_dir('needdep', ['dependencies' => ['ghost']]);
     config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
-    $this->artisan('addon:install', ['name' => 'needdep'])->assertExitCode(1);
+    $this->artisan('addon:install', ['name' => 'needdep'])
+        ->expectsOutputToContain('依赖插件')
+        ->assertExitCode(1);
     expect(Addon::find('needdep'))->toBeNull();
 });
 

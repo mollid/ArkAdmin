@@ -47,7 +47,9 @@ abstract class AddonServiceProvider extends ServiceProvider
         if (! is_file($file)) {
             return;
         }
-        Route::middleware('auth:admin')
+        // api 组与框架 routes/api.php 一致（throttle/参数绑定）；插件路由在 boot 期独立挂载，
+        // 不在框架 api 组闭包内，必须显式带上
+        Route::middleware(['api', 'auth:admin'])
             ->prefix('api/admin/addon/'.$this->info->name)
             ->group($file);
     }

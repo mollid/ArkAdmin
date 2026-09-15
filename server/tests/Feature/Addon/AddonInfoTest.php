@@ -56,3 +56,12 @@ it('缺少 src 目录抛异常', function () {
 it('dependencies 非数组抛异常', function () {
     expect(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['dependencies' => 'cms'])))->toThrow(AddonException::class);
 });
+
+it('dependencies 含非字符串或空项抛异常', function () {
+    expect(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['dependencies' => ['ok', 123]])))->toThrow(AddonException::class)
+        ->and(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['dependencies' => ['']])))->toThrow(AddonException::class);
+});
+
+it('清单 name 与目录名不一致抛异常', function () {
+    expect(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['name' => 'beta'])))->toThrow(AddonException::class);
+});

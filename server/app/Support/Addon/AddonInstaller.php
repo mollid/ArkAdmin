@@ -273,21 +273,30 @@ class AddonInstaller
         $this->refreshFrameworkCaches();
         if (app()->isBooted() && class_exists($info->providerClass())) {
             app()->register($info->providerClass());
+            $this->manager->markLoaded($info->providerClass());
         }
     }
 
-    /** §11 风险对策：config/route/event 缓存在用时自动重建，保证装/停/卸即时可见 */
+    /** §11 风险对策：config/route/event 缓存在用时自动重建，保证装/停/卸即时可见。
+     *  重建失败只降级为告警——状态变更已落库，不能让缓存目录不可写把操作打成失败 */
     protected function refreshFrameworkCaches(): void
     {
+        $rebuild = function (string $command): void {
+            try {
+                Artisan::call($command);
+            } catch (\Throwable $e) {
+                logger()->warning("框架缓存重建失败（{$command}）：".$e->getMessage());
+            }
+        };
         $cachePath = base_path('bootstrap/cache');
         if (is_file($cachePath.'/config.php')) {
-            Artisan::call('config:cache');
+            $rebuild('config:cache');
         }
         if (is_file($cachePath.'/events.php')) {
-            Artisan::call('event:cache');
+            $rebuild('event:cache');
         }
         if (glob($cachePath.'/routes-*.php')) {
-            Artisan::call('route:cache');
+            $rebuild('route:cache');
         }
     }
 }

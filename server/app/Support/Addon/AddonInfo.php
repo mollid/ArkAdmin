@@ -40,6 +40,12 @@ class AddonInfo
             // \$ 必须转义：$ 后接全角字符的字节会被双引号串解析为变量
             throw new AddonException("插件名必须匹配 ^[a-z][a-z0-9_]*\$：{$json['name']}");
         }
+        if ($json['name'] !== basename($dir)) {
+            // 目录名即身份：install/boot 均以 addons/<name>/ 定位，错位意味着注册到找不到的目录
+            throw new AddonException(
+                "清单 name [{$json['name']}] 与目录名 [".basename($dir)."] 不一致：{$file}"
+            );
+        }
         if ($json['type'] !== 'app') {
             throw new AddonException("暂不支持的插件类型 [{$json['type']}]：{$file}");
         }
@@ -50,6 +56,12 @@ class AddonInfo
         if (! is_array($dependencies)) {
             throw new AddonException("dependencies 必须为字符串数组：{$file}");
         }
+        foreach ($dependencies as $dep) {
+            if (! is_string($dep) || $dep === '') {
+                // 静默丢弃会让坏清单混进生命周期，与"无效清单不进入安装流程"的契约冲突
+                throw new AddonException("dependencies 含非字符串或空项：{$file}");
+            }
+        }
 
         return new self(
             $json['name'],
@@ -58,7 +70,7 @@ class AddonInfo
             $json['version'],
             $json['type'],
             $json['support_version'],
-            array_values(array_filter($dependencies, 'is_string')),
+            array_values($dependencies),
             $dir,
         );
     }

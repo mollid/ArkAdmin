@@ -46,16 +46,12 @@ function menu_tree_names(array $nodes): array
     return $names;
 }
 
-/** 在测试固定目录下生成插件 fixture（合法最小 info.json + 可选 src/） */
+/** 在测试固定目录下生成插件 fixture（合法最小 info.json + 可选 src/）。目录名强制等于插件名 */
 function make_addon_dir(string $name, array $infoOverrides = [], bool $withSrc = true): string
 {
-    static $seq = 0;
-    $dir = storage_path('framework/addon-fixture/'.($seq++).'_'.uniqid($name.'_', true));
-    if ($withSrc) {
-        mkdir($dir.'/src', 0777, true);
-    } else {
-        mkdir($dir, 0777, true);
-    }
+    $dir = storage_path('framework/addon-fixture/'.$name);
+    remove_dir($dir);
+    mkdir($dir.($withSrc ? '/src' : ''), 0777, true);
     file_put_contents($dir.'/info.json', json_encode(array_merge([
         'name' => $name,
         'title' => '测试插件',

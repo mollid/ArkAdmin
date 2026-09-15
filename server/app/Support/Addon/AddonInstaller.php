@@ -69,7 +69,9 @@ class AddonInstaller
         }
         $info = $this->mustExistOnDisk($name);
         if (! $keepData) {
-            Artisan::call('migrate:rollback', [
+            // migrate:reset 而非 rollback：rollback 只作用于最后一批迁移（getLast()），
+            // 后装的其它插件/框架迁移会把本插件挤出最后一批，导致回滚静默空转
+            Artisan::call('migrate:reset', [
                 '--path' => $info->migrationPath(), '--realpath' => true, '--force' => true,
             ]);
         }

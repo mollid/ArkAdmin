@@ -6,4 +6,7 @@ return [
 
     // 插件根目录；仓库根 addons/，server/addons 为其软链（§4）
     'addon_path' => env('ARKADMIN_ADDON_PATH', base_path('addons')),
+
+    // admin 前端根目录（复制插件前端 admin/ → <此目录>/src/addons/<key>/）
+    'admin_path' => env('ARKADMIN_ADMIN_PATH', dirname(base_path()).'/admin'),
 ];

@@ -79,3 +79,9 @@ function remove_dir(string $dir): void
     }
     @rmdir($dir);
 }
+
+// 插件前端复制产物不随 DB 事务回滚（RefreshDatabase 只管库）；套件级清空安全——
+// admin/src/addons 是生成物，源码唯一来源是 addons/<key>/admin，重新安装即恢复
+afterEach(function () {
+    remove_dir(rtrim((string) config('arkadmin.admin_path'), '/').'/src/addons');
+});

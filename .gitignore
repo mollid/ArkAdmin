@@ -22,3 +22,6 @@ storage/*.key
 
 # tinker psysh 运行时目录
 .config/
+
+# 插件前端复制产物（源码在 addons/<key>/admin，安装时生成）
+admin/src/addons/

@@ -59,6 +59,7 @@ class AddonInstaller
             return $record;
         });
         $this->finish($info);
+        $this->syncFrontend($info);
 
         return $record;
     }
@@ -85,6 +86,7 @@ class AddonInstaller
         Menu::where('addon_key', $name)->delete();
         $this->deletePermissions($name);
         $record->delete();
+        $this->purgeFrontend($name);
         $this->manager->flushCompiled();
         $this->refreshFrameworkCaches();
     }
@@ -125,6 +127,50 @@ class AddonInstaller
         $this->detachListeners($info);
         $this->manager->flushCompiled();
         $this->refreshFrameworkCaches();
+    }
+
+    /** 插件前端产物目录：<admin_path>/src/addons/<name> */
+    public function frontendDir(string $addonName): string
+    {
+        return rtrim((string) config('arkadmin.admin_path'), '/').'/src/addons/'.$addonName;
+    }
+
+    /** §6.6：addons/<key>/admin/ → admin/src/addons/<key>/，先清后拷保证可重入；无前端则跳过 */
+    protected function syncFrontend(AddonInfo $info): bool
+    {
+        $src = $info->dir.'/admin';
+        if (! is_dir($src)) {
+            return false;
+        }
+        $this->purgeFrontend($info->name);
+        $dest = $this->frontendDir($info->name);
+        @mkdir($dest, 0777, true);
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($items as $item) {
+            $target = $dest.'/'.$items->getSubPathName();
+            $item->isDir() ? @mkdir($target, 0777, true) : @copy($item->getPathname(), $target);
+        }
+
+        return true;
+    }
+
+    protected function purgeFrontend(string $addonName): void
+    {
+        $dir = $this->frontendDir($addonName);
+        if (! is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($dir);
     }
 
     protected function mustExistOnDisk(string $name): AddonInfo

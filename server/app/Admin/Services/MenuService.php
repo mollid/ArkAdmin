@@ -4,6 +4,7 @@ namespace App\Admin\Services;
 
 use App\Admin\Models\Admin;
 use App\Admin\Models\Menu;
+use App\Support\Addon\Models\Addon;
 use Illuminate\Support\Collection;
 
 class MenuService
@@ -16,8 +17,12 @@ class MenuService
             $perms = $admin->getAllPermissions()->pluck('name')->flip();
         }
 
+        // 禁用插件保留菜单行但不参与渲染（§6.3：仅已启用插件参与菜单渲染）
+        $disabledAddons = Addon::query()->where('enabled', false)->pluck('name')->flip();
+
         $visible = Menu::orderBy('sort')->get()
             ->filter(fn (Menu $m) => $m->is_show)
+            ->filter(fn (Menu $m) => $m->addon_key === '' || !$disabledAddons->has($m->addon_key))
             // permission 为空串（或防御性地为 null）表示无权限要求；in_array 严格比较避免 '0' 被 PHP 判空
             ->filter(fn (Menu $m) => $perms === null || in_array($m->permission, ['', null], true) || $perms->has($m->permission))
             ->values();

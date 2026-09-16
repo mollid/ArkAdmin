@@ -5,6 +5,7 @@ namespace App\Admin\Http\Controllers;
 use App\Admin\Http\Requests\AdminStoreRequest;
 use App\Admin\Http\Requests\AdminUpdateRequest;
 use App\Admin\Models\Admin;
+use App\Support\Http\PgLike;
 use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,12 +21,12 @@ class AdminController extends Controller
         $request->validate([
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
-        // PG 的 LIKE 默认转义符是反斜杠；用户输入中的 %/_/\ 须转义为字面量，否则成为通配符
-        $like = fn (string $v) => '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $v) . '%';
         $q = Admin::query()
             ->with('roles')
-            ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike', $like($request->input('username'))))
-            ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike', $like($request->input('name'))))
+            ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike',
+                PgLike::wrap((string) $request->input('username'))))
+            ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike',
+                PgLike::wrap((string) $request->input('name'))))
             ->orderByDesc('id');
 
         // 编辑回填契约：每行附 roles（角色 id 数组）——覆盖预载的 Role 模型集合，避免序列化出完整角色对象

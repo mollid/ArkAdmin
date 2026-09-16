@@ -1,6 +1,7 @@
 <?php
 
 use App\Admin\Http\Controllers\AdminController;
+use App\Admin\Http\Controllers\AttachmentController;
 use App\Admin\Http\Controllers\AuthController;
 use App\Admin\Http\Controllers\MenuController;
 use App\Admin\Http\Controllers\RoleController;
@@ -28,5 +29,10 @@ Route::prefix('admin')->group(function () {
         Route::post('menus', [MenuController::class, 'store'])->middleware('permission:system.menu.store');
         Route::put('menus/{menu}', [MenuController::class, 'update'])->middleware('permission:system.menu.update');
         Route::delete('menus/{menu}', [MenuController::class, 'destroy'])->middleware('permission:system.menu.destroy');
+
+        // §5.4 素材库（框架级）
+        Route::get('attachments', [AttachmentController::class, 'index'])->middleware('permission:system.attachment.index');
+        Route::post('attachments', [AttachmentController::class, 'store'])->middleware('permission:system.attachment.store');
+        Route::delete('attachments/{attachment}', [AttachmentController::class, 'destroy'])->middleware('permission:system.attachment.destroy');
     });
 });

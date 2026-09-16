@@ -18,6 +18,11 @@ class MenuSeeder
             'sort' => 0, 'is_show' => true, 'addon_key' => '', 'permission' => '',
         ]);
         $upsert([
+            'name' => 'attachment', 'title' => '素材库', 'icon' => 'Picture',
+            'route_path' => '/attachment', 'view_path' => 'attachment/index',
+            'sort' => 90, 'is_show' => true, 'addon_key' => '', 'permission' => 'system.attachment.index',
+        ]);
+        $upsert([
             'name' => 'system', 'title' => '系统管理', 'icon' => 'Setting',
             'route_path' => '/system', 'view_path' => '', 'sort' => 100,
             'is_show' => true, 'addon_key' => '', 'permission' => '',

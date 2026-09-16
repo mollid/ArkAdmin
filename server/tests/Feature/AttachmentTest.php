@@ -1,0 +1,125 @@
+<?php
+
+use App\Admin\Events\AttachmentSaved;
+use App\Admin\Models\Attachment;
+use App\Admin\Services\MenuService;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+
+beforeEach(function () {
+    (new App\Admin\Seeds\RbacSeeder)->run();
+    (new App\Admin\Seeds\MenuSeeder)->run();
+    Storage::fake('public');
+});
+
+it('超管上传图片：行/文件/尺寸/url 齐备且派发 attachment.saved', function () {
+    Event::fake([AttachmentSaved::class]);
+
+    $r = $this->withToken(admin_token())->post('/api/admin/attachments', [
+        'file' => UploadedFile::fake()->image('封面.png', 800, 600),
+    ]);
+    $r->assertOk()->assertJsonPath('code', 0);
+
+    $row = $r->json('data');
+    expect($row['name'])->toBe('封面.png')
+        ->and($row['disk'])->toBe('public')
+        ->and($row['width'])->toBe(800)
+        ->and($row['height'])->toBe(600)
+        ->and($row['mime'])->toStartWith('image/')
+        ->and($row['size'])->toBeInt()->toBeGreaterThan(0)
+        ->and($row['uploader_type'])->toBe('admin')
+        ->and($row['uploader_id'])->toBe(super_admin()->id)
+        // url 由 disk 配置推导，指向 /storage/attachments/...
+        ->and($row['url'])->toContain('/storage/attachments/')
+        ->and(str_contains($row['path'], 'attachments/'))->toBeTrue();
+
+    Storage::disk('public')->assertExists($row['path']);
+    Event::assertDispatched(AttachmentSaved::class,
+        fn (AttachmentSaved $e) => $e->attachment->id === $row['id']);
+});
+
+it('非白名单扩展名 422；超限大小 422', function () {
+    $token = admin_token();
+
+    $this->withToken($token)->post('/api/admin/attachments', [
+        'file' => UploadedFile::fake()->create('evil.svg', 10, 'image/svg+xml'),
+    ])->assertStatus(422);
+
+    config(['arkadmin.attachment.max_size' => 1]); // KB
+    $this->withToken($token)->post('/api/admin/attachments', [
+        'file' => UploadedFile::fake()->create('big.jpg', 10, 'image/jpeg'),
+    ])->assertStatus(422);
+
+    expect(Attachment::count())->toBe(0);
+});
+
+it('列表分页/keyword/类型过滤；keyword 通配符按字面量', function () {
+    $token = admin_token();
+    foreach (['a.jpg', 'b%.jpg', 'c.png'] as $name) {
+        $this->withToken($token)->post('/api/admin/attachments',
+            ['file' => UploadedFile::fake()->image($name)])->assertOk();
+    }
+
+    $all = $this->withToken($token)->getJson('/api/admin/attachments?per_page=2');
+    $all->assertOk()->assertJsonPath('code', 0)
+        ->assertJsonPath('data.total', 3)
+        ->assertJsonPath('data.per_page', 2)
+        ->assertJsonCount(2, 'data.list');
+
+    // % 输入按字面量匹配：只命中文件名本身含 % 的那一条
+    $this->withToken($token)->getJson('/api/admin/attachments?keyword='.rawurlencode('%.jpg'))
+        ->assertOk()->assertJsonPath('data.total', 1)
+        ->assertJsonPath('data.list.0.name', 'b%.jpg');
+
+    $this->withToken($token)->getJson('/api/admin/attachments?type=image')
+        ->assertOk()->assertJsonPath('data.total', 3);
+
+    // png 也属于 image/*；用非图 mime 的假附件验证 type 过滤不会放行
+    Storage::disk('public')->put('attachments/notimg.bin', 'x');
+    Attachment::create(['name' => 'doc.bin', 'path' => 'attachments/notimg.bin', 'disk' => 'public',
+        'mime' => 'application/octet-stream', 'size' => 1]);
+    $this->withToken($token)->getJson('/api/admin/attachments?type=image')
+        ->assertOk()->assertJsonPath('data.total', 3);
+});
+
+it('删除：行与文件一起删', function () {
+    $token = admin_token();
+    $row = $this->withToken($token)->post('/api/admin/attachments',
+        ['file' => UploadedFile::fake()->image('del.png')])->json('data');
+
+    $this->withToken($token)->deleteJson("/api/admin/attachments/{$row['id']}")
+        ->assertOk()->assertJsonPath('code', 0);
+
+    expect(Attachment::find($row['id']))->toBeNull();
+    Storage::disk('public')->assertMissing($row['path']);
+});
+
+it('无 system.attachment.* 权限返回 403 信封', function () {
+    App\Admin\Models\Admin::create(['username' => 'plain', 'password' => 'x123456', 'status' => 1]);
+    $token = $this->postJson('/api/admin/auth/login', ['username' => 'plain', 'password' => 'x123456'])
+        ->json('data.token');
+
+    $this->getJson('/api/admin/attachments', ['Authorization' => "Bearer {$token}"])
+        ->assertOk()->assertJsonPath('code', 403);
+    $this->postJson('/api/admin/attachments', [], ['Authorization' => "Bearer {$token}"])
+        ->assertOk()->assertJsonPath('code', 403);
+    $this->deleteJson('/api/admin/attachments/1', [], ['Authorization' => "Bearer {$token}"])
+        ->assertOk()->assertJsonPath('code', 403);
+});
+
+it('RbacSeeder 种出 attachment 权限且超管拥有；MenuSeeder 种出素材库菜单', function () {
+    foreach (['index', 'store', 'destroy'] as $act) {
+        $p = Spatie\Permission\Models\Permission::where('name', "system.attachment.{$act}")
+            ->where('guard_name', 'admin')->first();
+        expect($p)->not->toBeNull()->and($p->module)->toBe('system');
+    }
+    expect(super_admin()->hasPermissionTo('system.attachment.index'))->toBeTrue()
+        ->and(menu_tree_names((new MenuService)->treeFor(super_admin())))->toContain('attachment')
+        ->and(App\Admin\Models\Menu::where('name', 'attachment')->value('permission'))
+        ->toBe('system.attachment.index');
+
+    // 无权限账号看不到素材库菜单
+    $u = App\Admin\Models\Admin::create(['username' => 'noperm', 'password' => 'x123456', 'status' => 1]);
+    expect(menu_tree_names((new MenuService)->treeFor($u)))->not->toContain('attachment');
+});

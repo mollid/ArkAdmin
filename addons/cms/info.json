@@ -1,0 +1,9 @@
+{
+  "name": "cms",
+  "title": "内容管理",
+  "description": "栏目与文章管理：树形栏目、富文本文章、封面与标签，消费框架素材库",
+  "version": "0.1.0",
+  "type": "app",
+  "support_version": "0.1.0",
+  "dependencies": []
+}

@@ -155,7 +155,9 @@ public function store(Request $request): JsonResponse
     $request->validate([
         'file' => ['required', 'file',
             'max:'.(int) config('arkadmin.attachment.max_size', 10240),
-            'mimes:'.implode(',', (array) config('arkadmin.attachment.extensions'))],
+            // 实施期修正（R2-10）：不再用 'mimes:' 规则（客户端 mime 可伪造），改闭包按
+            // AttachmentService::sniffedMime() 的 finfo 嗅探结果查 arkadmin.attachment.mimes 白名单
+            function (string $attribute, mixed $value, \Closure $fail) { /* 见 AttachmentController */ }],
     ]);
     return $this->success($this->service->store($request->file('file'), $request->user('admin')), '上传成功');
 }

@@ -52,6 +52,8 @@ M4 新增测试文件/用例组：
 5. 权限裁剪账号：侧边栏仅见文章不见栏目（对应 §9-3 自动化）
 6. CLI `addon:disable cms` → 刷新菜单消失；`addon:enable` → 恢复；`addon:uninstall` → 菜单/表/前端产物清除
 
+> 第二轮评审补充（唯一需 GUI 复核的改动）：新建文章时用工具栏加「项目符号」「待办勾选」「代码块」，保存后重新打开编辑，三者结构应保持原样（列表容器按 `data-list` 归一为 `UL`、代码块 `div.ql-code-block*` 保留）。源码依据见第二轮评审记录。
+
 ## 评审轮记录（2026-09-16，新视角代码评审后加固）
 
 评审结论 1 Critical / 6 Important / 9 Minor。核实后全部接受并修复（除按 YAGNI 降级两项，见末尾）。修复后全量：后端 **130 passed / 490 assertions**、前端 **29 passed**、`vue-tsc -b` + `npm run build` 通过。
@@ -70,6 +72,37 @@ M4 新增测试文件/用例组：
 **降级/拒绝项**：`cover_url` 不反查 `attachments.disk` 列（封面统一默认素材盘，文档化）；正文插图死链的反查清理（URL 无引用登记，留待素材引用表方案）。
 
 **已知覆盖边界**：`RichTextSanitizer` 为自研白名单净化，面向内部低权编辑者威胁模型，不承诺对抗专业 mXSS；富文本净化责任方（服务端收口）已在此定责，后续插件沿用该类或自建。
+
+## 评审轮记录（第二轮，2026-09-16，新视角对抗式复审）
+
+复审方法：重读 M4 全部产物（框架素材库 + CMS 后端/前端/测试），对可疑点写一次性探针实测（探针文件已删除，工作树干净），并逐条核对 round-1 修复的实际落点。基线数字复核属实（130 passed / 490 assertions、前端 29 passed）。本轮结论：3 Important 已修，7 Minor 记录待裁。修复后全量：后端 **137 passed / 523 assertions**、前端 **29 passed**、`vue-tsc -b` 通过。
+
+| 项 | 严重度 | 证据 | 修复 |
+|---|---|---|---|
+| 净化白名单未覆盖 Quill 2 真实产出：`li[data-list]` 被剥离、代码块 `div.ql-code-block*` 被解包 → 正文「保存即降级」（项目符号/待办变有序列表、代码块变纯文本） | Important | 探针实测 `<ol><li data-list="bullet">甲</li></ol>` → `<ol><li>甲</li></ol>`；`<div class="ql-code-block-container"><div class="ql-code-block">echo 1;</div></div>` → 纯文本 `echo 1;`。Quill 2.0.3 源码（`quill.js.map` 的 sourcesContent）：`ListItem.formats` 读 `data-list`、`ListContainer.tagName='OL'`、剪贴板 `['ol, ul', matchList]` 只按容器标签判型、`['pre', matchCodeBlock]` | 属性白名单加 `data-list`（取值限 bullet/ordered/checked/unchecked）；带 `ql-code-block*` class 的 div 保留结构（其余 div 仍解包）；非有序列表容器按 `data-list` 归一改写为 `ul`。新增 `tests/Unit/RichTextSanitizerTest.php`（4 例，含"不放宽安全边界"反向断言）+ HTTP 保存读回用例 |
+| PUT 文章显式 `tags: null`（`nullable` 规则放行）→ `array_values(null)` TypeError **500** | Important | 探针实测 HTTP 500 + `array_values(): Argument #1 must be of type array, null given`；`normalizeForStore` 有 `?? []` 兜底而 round-1 新拆的 `normalizeForUpdate` 没有 | `array_values((array) ($data['tags'] ?? []))`；store/update 双路径用例 |
+| 栏目 `parent_id` 无存在性校验（同模块 `article.category_id` 有 `Rule::exists`），可造出树中不可见、界面无法编辑/删除的孤儿栏目；显式 `parent_id: null` 撞 `NOT NULL` 变 500 | Important | 探针实测 `parent_id=99999` → code 0、树中不可见、DB 有行；null 用例先红（500/200）后绿 | 抽 `parentIdRules()`（0=顶级、>0 必须存在，store/update 共用）+ null 归一为 0；用例覆盖 store/update/树可见性 |
+
+**本轮 Minor 修复（确认范围后全部处理）**：
+
+| 项 | 处理 |
+|---|---|
+| PUT 契约 `status` 为 `required`，与「部分语义」矛盾 | 改 `sometimes\|required\|integer\|in:0,1`（`ArticleUpdateRequest` 类注释写明字段一律 sometimes）；用例：不传 status 不再 422 且状态/发布时间不变，显式 `status:null` 仍 422 |
+| `content` 无长度上限 | `Article::CONTENT_MAX = 200000`（字符，策略值，两个 FormRequest 共用）；新增超长 422 用例 |
+| `isImage()` 无任何业务调用方 | **删除**（YAGNI）：`arkadmin.attachment.mimes` 白名单当前仅图片，按 mime 分流渲染不可达；同步删 4 条单测。计划 T2 接口表该条目以本节为准 |
+| `AttachmentPicker.multiple` 无调用方 | **保留并钉死结论**：组件是框架公开件（§7.1）、`multiple` 是 T2 计划产物、round-1 已按其语义修跨页丢选；组件注释写明「预留（多图字段/图集），若 M5 CRUD 生成器的图片组字段仍未消费，按 YAGNI 复审移除」，避免下轮重复评审 |
+| 4 个插件 i18n 键零引用 | 删 `nameRequired/titleRequired/allCategories/publishOnSave`（页面改用按钮 `:disabled`；`allCategories` 对应 round-1 已移除的伪节点；`publishOnSave` 无展示位） |
+| i18n 硬编码残留 | 框架语言包补 `common.tip / deleteConfirm / attachmentLibrary / copyFailed`；插件语言包补 `cms.category.{topLevel,yes,no}`；素材库页标题与删除确认、插件页「提示」「是/否」「顶级」全部走 `t()` |
+| 前端 `load()/openDialog()/copy()` 无 catch | 素材库页、共享选择器、CMS 两页统一 try/catch（拦截器已提示，仅吞 rejection 并保持现有数据）；`copy` 失败提示 `common.copyFailed`（非安全上下文 clipboard 会 reject） |
+| 服务层无白名单兜底 | `AttachmentService::store` 改为「嗅探 mime 不在白名单 → 抛 `InvalidArgumentException`」，不再回落 `.bin`；用例覆盖（直调抛异常、不落库不留文件） |
+| 写盘与建行无事务 | 建行异常时回收已写盘文件后重抛；用模型 `creating` 监听模拟失败断言无孤儿文件（用完 `flushEventListeners`，避免静态监听污染同进程后续用例） |
+| `AttachmentDeleted` 队列风险 | 事件注释标注「仅同步消费」：模型行已删，监听器入队后 `SerializesModels` 无法水合 |
+| 正文插图绝对 URL（换环境失效） | 改用**读取期重写**：`Article::getContentAttribute` 把 content 内 `//<任意主机>/storage/` 归一为当前素材盘前缀（外链不动）。未采用「存相对路径」——前端在 EdgeOne 与后端分域部署时相对路径会解析到前端域，dev 编辑器还需额外代理 `/storage`。用例：旧主机 → 当前前缀、外链保持 |
+| 计划文档 `extensions` 过期表述 | `2026-09-16-arkadmin-m4-cms.md` 的 Interfaces 与代码样例加「实施期修正」标注，指向 finfo 内容嗅探白名单方案 |
+
+**已核实非问题（避免后续重复评审）**：Element Plus 清空选择回写 `undefined`（`DEFAULT_VALUE_ON_CLEAR = void 0`）且 Laravel `ConvertEmptyStringsToNull` 兜住空串 → 清空筛选参数不会 422（实测 `category_id=''`/`status=''` → 200 code 0）；`href` 的 tab/换行协议绕过不成立（libxml 序列化时 URI 属性控制字符转义为 `%09`，`parse_url` scheme 为 NULL）。
+
+**验证边界**：列表容器改写与代码块保留的依据是 Quill 2.0.3 源码，未做浏览器实跑（项目未装 jsdom，Playwright 环境未恢复）；`clipboard.convert` 的真实往返仍需 GUI 走查确认。
 
 ## 遗留与后续
 

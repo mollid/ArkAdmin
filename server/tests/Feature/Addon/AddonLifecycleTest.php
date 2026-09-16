@@ -20,6 +20,12 @@ afterEach(function () {
     app(AddonManager::class)->flushCompiled();
 });
 
+it('测试环境把插件前端产物重定向到 storage，绝不指向真实 admin/', function () {
+    // M3 评审轮回归：曾因未隔离导致跑测试删掉开发者工作区里的 admin/src/addons/<key>
+    expect(config('arkadmin.admin_path'))->toStartWith(storage_path())
+        ->and(config('arkadmin.admin_path'))->not->toBe(dirname(base_path()).'/admin');
+});
+
 it('安装 demo：注册表/业务表/菜单/权限齐备且接口可用', function () {
     $record = app(AddonInstaller::class)->install('demo');
     expect($record->enabled)->toBeTrue()

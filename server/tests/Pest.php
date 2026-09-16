@@ -80,8 +80,5 @@ function remove_dir(string $dir): void
     @rmdir($dir);
 }
 
-// 插件前端复制产物不随 DB 事务回滚（RefreshDatabase 只管库）；套件级清空安全——
-// admin/src/addons 是生成物，源码唯一来源是 addons/<key>/admin，重新安装即恢复
-afterEach(function () {
-    remove_dir(rtrim((string) config('arkadmin.admin_path'), '/').'/src/addons');
-});
+// 插件前端产物的隔离在 Tests\TestCase::setUp/tearDown（Pest.php 顶层 afterEach 不生效：
+// Pest 按定义文件为键索引钩子，全局清理必须挂在 TestCase 上）

@@ -44,6 +44,16 @@
 2. 列表搜索/分页、新增（标题必填、置顶开关、长文本域）、编辑（PUT 部分语义）、删除
 3. `npm run build` 后生成页面应产出独立 chunk
 
+## 用户走查反馈（2026-09-16，Vite 报错即修复）
+
+用户 GUI 走查时 Vite 解析报错：`src/addons/cms/lang/zh-cn.ts:34  cms.notice: {`——生成器的语言包键直接用了带点
+的 `cms.notice`：① JS 对象字面量非法标识符（语法错误）；② 即便加引号也会落在 `zh-cn.cms["cms.notice"]` 错误命名
+空间层级，`t('cms.notice.title')` 依然解析不到。修复 `e02b3e6`：语言包键改用**不带插件前缀的内层键**（新增
+`{{LANG_KEY_INNER}}` token，键名与 `mergeAddonLangs` 的 `zh-cn.<addon> → <内层键>` 两级结构对齐），并加
+「不得包含 `fx.item` 带点键」反向断言。开发侧污染的产物文件经 `addon:disable cms && addon:enable cms` 整目录
+重同步恢复（这也是自愈机制的日常用法：**改插件源码后跑一次 disable/enable 即可**）。
+教训：生成器产出的每一类文件都要有「**语法合法性**」断言（PHP 已有 `php -l`，本次补上 TS 侧的键形态约束）。
+
 ## 遗留与后续
 
 - 图片列 → 素材库选择器的表单联动（`AttachmentPicker.multiple` 预留位）、jsonb 表单编辑器、关联字段下拉

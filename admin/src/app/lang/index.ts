@@ -1,7 +1,5 @@
-import { createI18n, type LocaleMessages } from 'vue-i18n'
-
-// 单个 locale 的语言包类型（vue-i18n 只导出复数形式，索引访问取值类型）
-type LocalePack = LocaleMessages<any>[string]
+import { createI18n } from 'vue-i18n'
+import { mergeAddonLangs, type LocalePack } from './mergeAddonLangs'
 
 const zhCn: LocalePack = {
   app: { title: 'ArkAdmin 方舟后台' },
@@ -15,12 +13,9 @@ const zhCn: LocalePack = {
 // eager 静态合入（构建期定死，无运行时开销）；未安装任何插件时 glob 为空
 const addonLangs = import.meta.glob('/src/addons/*/lang/zh-cn.ts', { eager: true }) as Record<
   string,
-  { default: LocalePack }
+  { default?: unknown }
 >
-for (const [path, mod] of Object.entries(addonLangs)) {
-  const key = path.split('/')[3] // /src/addons/<key>/lang/zh-cn.ts
-  zhCn[key] = mod.default
-}
+mergeAddonLangs(zhCn, addonLangs)
 
 const i18n = createI18n({
   legacy: false,

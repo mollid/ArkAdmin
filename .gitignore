@@ -23,6 +23,10 @@ admin/dist/
 storage/*.key
 .superpowers/
 
+# 测试 fixture 与运行时产物（不进版本库）
+/server/storage/framework/addon-fixture/
+/server/storage/framework/admin-test/
+
 # tinker psysh 运行时目录
 .config/
 

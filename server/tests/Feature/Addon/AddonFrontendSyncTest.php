@@ -1,12 +1,13 @@
 <?php
 
 use App\Support\Addon\AddonInstaller;
-use App\Support\Addon\AddonManager;
 
 beforeEach(function () {
     (new App\Admin\Seeds\RbacSeeder)->run();
-    // 前端产物隔离到临时目录，避免测试污染真实 admin/src/addons
+    // 前端产物隔离到临时目录，避免测试污染真实 admin/src/addons；
+    // 目录形状需具备 src/（syncFrontend 以此判定 admin_path 有效）
     config(['arkadmin.admin_path' => storage_path('framework/admin-fixture')]);
+    @mkdir(storage_path('framework/admin-fixture/src'), 0777, true);
 });
 
 afterEach(function () {
@@ -63,15 +64,17 @@ it('重复 install 覆盖而非叠加上次残留', function () {
     make_frontend_addon('fe');
     $installer = app(AddonInstaller::class);
     $installer->install('fe');
-
-    // 上次复制产物中塞一个脏文件，重装后应消失（先清后拷）
-    $stale = config('arkadmin.admin_path').'/src/addons/fe/views/stale.vue';
-    file_put_contents($stale, 'stale');
     $installer->disable('fe');
-    $installer->uninstall('fe');
+    $installer->uninstall('fe'); // 此时目标目录已被清掉
+
+    // 手工重建带脏文件的目标目录：证明 install 内部确实先清后拷（而非沿用残留）
+    $dest = $installer->frontendDir('fe');
+    mkdir($dest.'/views', 0777, true);
+    file_put_contents($dest.'/views/stale.vue', 'stale');
+
     $installer->install('fe');
-    expect(is_file($stale))->toBeFalse()
-        ->and(is_file(config('arkadmin.admin_path').'/src/addons/fe/views/x/index.vue'))->toBeTrue();
+    expect(is_file($dest.'/views/stale.vue'))->toBeFalse()
+        ->and(is_file($dest.'/views/x/index.vue'))->toBeTrue();
 });
 
 it('uninstall 删除前端产物', function () {
@@ -94,4 +97,45 @@ it('keep-data 卸载同样删除前端产物', function () {
     $installer->uninstall('fe', keepData: true);
 
     expect(is_dir(config('arkadmin.admin_path').'/src/addons/fe'))->toBeFalse();
+});
+
+it('目标目录不可写时不谎报成功：无同步提示、旧副本完整保留', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    make_frontend_addon('fe');
+
+    // 先成功安装一次，制造一份“好的旧副本”
+    $installer = app(AddonInstaller::class);
+    $installer->install('fe');
+    $dest = $installer->frontendDir('fe');
+    $installer->disable('fe');
+    $installer->uninstall('fe');
+
+    // 手工重建副本，并把 addons 父目录设为只读，模拟运行期不可写
+    mkdir($dest.'/views/x', 0777, true);
+    file_put_contents($dest.'/views/x/index.vue', 'old-copy');
+    $addonsDir = dirname($dest);
+    chmod($addonsDir, 0555);
+
+    try {
+        $this->artisan('addon:install', ['name' => 'fe'])
+            ->doesntExpectOutputToContain('npm run build') // 同步失败 → 不打印构建提示
+            ->assertExitCode(0);                          // 后端安装本身仍成功
+        // 旧副本内容完好（原子替换：失败不破坏已有产物），且未记录为已同步
+        expect(file_get_contents($dest.'/views/x/index.vue'))->toBe('old-copy')
+            ->and($installer->lastSyncedFrontend)->toBeNull();
+    } finally {
+        chmod($addonsDir, 0777);
+    }
+});
+
+it('admin_path 为空视为配置错误并拒绝同步', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    config(['arkadmin.admin_path' => '  ']);
+    make_frontend_addon('fe');
+
+    $installer = app(AddonInstaller::class);
+    $installer->install('fe');
+    // 不抛异常（后端安装继续），但同步返回 null，不会往 filesystem 根写 /src/addons
+    expect($installer->lastSyncedFrontend)->toBeNull()
+        ->and(is_dir('/src/addons'))->toBeFalse();
 });

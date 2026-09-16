@@ -129,29 +129,94 @@ class AddonInstaller
         $this->refreshFrameworkCaches();
     }
 
+    /** 最近一次前端同步的目标路径；null 表示无前端或同步失败（命令据此决定是否提示构建） */
+    public ?string $lastSyncedFrontend = null;
+
     /** 插件前端产物目录：<admin_path>/src/addons/<name> */
     public function frontendDir(string $addonName): string
     {
-        return rtrim((string) config('arkadmin.admin_path'), '/').'/src/addons/'.$addonName;
+        return rtrim(trim((string) config('arkadmin.admin_path')), '/').'/src/addons/'.$addonName;
     }
 
-    /** §6.6：addons/<key>/admin/ → admin/src/addons/<key>/，先清后拷保证可重入；无前端则跳过 */
-    protected function syncFrontend(AddonInfo $info): bool
+    /**
+     * §6.6：addons/<key>/admin/ → admin/src/addons/<key>/。
+     * 先拷贝到同分区临时目录再整体替换：拷贝阶段失败时既有产物原样保留（不出现半拷贝前端）；
+     * 任何失败都记警告并返回 null，绝不谎报"已同步"。
+     */
+    protected function syncFrontend(AddonInfo $info): ?string
     {
+        $this->lastSyncedFrontend = null;
         $src = $info->dir.'/admin';
         if (! is_dir($src)) {
-            return false;
+            return null;
         }
-        $this->purgeFrontend($info->name);
+        $adminPath = rtrim(trim((string) config('arkadmin.admin_path')), '/');
+        // 空值/不指向真实后台目录一律拒绝：否则 mkdir -p 会在文件系统某处造出幻影 admin 树
+        if ($adminPath === '' || ! is_dir($adminPath.'/src')) {
+            logger()->warning("插件 [{$info->name}] 前端未同步：arkadmin.admin_path 无效（{$adminPath}）");
+
+            return null;
+        }
         $dest = $this->frontendDir($info->name);
-        @mkdir($dest, 0777, true);
+        $parent = dirname($dest);
+        if (! is_dir($parent) && ! @mkdir($parent, 0777, true)) {
+            logger()->warning("插件 [{$info->name}] 前端未同步：{$parent} 无法创建");
+
+            return null;
+        }
+        if (! is_writable($parent)) {
+            logger()->warning("插件 [{$info->name}] 前端未同步：{$parent} 不可写");
+
+            return null;
+        }
+        $tmp = $dest.'.tmp-'.getmypid();
+        $this->deleteDir($tmp);
+        if (! @mkdir($tmp, 0777, true) || ! $this->copyTree($src, $tmp)) {
+            logger()->warning("插件 [{$info->name}] 前端拷贝失败，已保留既有产物");
+            $this->deleteDir($tmp);
+
+            return null;
+        }
+        // 原子替换：旧目录改名让位（不删内容）→ 新目录就位 → 成功后清旧目录。
+        // 任一步失败都能保留/回滚出完整的旧副本，杜绝半拷贝或半删除状态
+        $backup = $dest.'.bak-'.getmypid();
+        $this->deleteDir($backup);
+        if (is_dir($dest) && ! @rename($dest, $backup)) {
+            logger()->warning("插件 [{$info->name}] 前端替换失败：无法让位旧产物，请检查 admin_path 权限");
+            $this->deleteDir($tmp);
+
+            return null;
+        }
+        if (! @rename($tmp, $dest)) {
+            logger()->warning("插件 [{$info->name}] 前端替换失败，已回滚旧产物");
+            if (is_dir($backup)) {
+                @rename($backup, $dest);
+            }
+            $this->deleteDir($tmp);
+
+            return null;
+        }
+        $this->deleteDir($backup);
+        $this->lastSyncedFrontend = $dest;
+
+        return $dest;
+    }
+
+    protected function copyTree(string $src, string $dest): bool
+    {
         $items = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::SELF_FIRST
         );
         foreach ($items as $item) {
             $target = $dest.'/'.$items->getSubPathName();
-            $item->isDir() ? @mkdir($target, 0777, true) : @copy($item->getPathname(), $target);
+            if ($item->isDir()) {
+                if (! is_dir($target) && ! @mkdir($target, 0777, true)) {
+                    return false;
+                }
+            } elseif (! @copy($item->getPathname(), $target)) {
+                return false;
+            }
         }
 
         return true;
@@ -159,7 +224,11 @@ class AddonInstaller
 
     protected function purgeFrontend(string $addonName): void
     {
-        $dir = $this->frontendDir($addonName);
+        $this->deleteDir($this->frontendDir($addonName));
+    }
+
+    protected function deleteDir(string $dir): void
+    {
         if (! is_dir($dir)) {
             return;
         }

@@ -75,7 +75,13 @@ M4 新增测试文件/用例组：
 
 ## 评审轮记录（第二轮，2026-09-16，新视角对抗式复审）
 
-复审方法：重读 M4 全部产物（框架素材库 + CMS 后端/前端/测试），对可疑点写一次性探针实测（探针文件已删除，工作树干净），并逐条核对 round-1 修复的实际落点。基线数字复核属实（130 passed / 490 assertions、前端 29 passed）。本轮结论：3 Important 已修，7 Minor 记录待裁。修复后全量：后端 **137 passed / 523 assertions**、前端 **29 passed**、`vue-tsc -b` 通过。
+复审方法：重读 M4 全部产物（框架素材库 + CMS 后端/前端/测试），对可疑点写一次性探针实测（探针文件已删除，工作树干净），并逐条核对 round-1 修复的实际落点。基线数字复核属实（130 passed / 490 assertions）。本轮结论：3 Important 已修，7 Minor 记录待裁。修复后全量：后端 **137 passed / 523 assertions**、前端 **25 passed**、`vue-tsc -b` 通过。
+
+> 第三轮独立复核（2026-09-16，接本轮修订后原样验证，含反向验证）：
+> 1. **本轮净化保真修复成立且必要**——用 jsdom 注入 Quill 2.0.3 UMD 构建实测（最接近浏览器行为）：`<ol><li data-list="bullet">` 去掉 `data-list` 后被解析为**有序列表**，证明 round-1 的净化器确实造成「保存即降级」，本轮修复命中真实缺陷；`<ul>` 归一改写亦经实测确认生效（同容器混用 ordered/bullet 时刻意不改写，与其单测一致）。
+> 2. **本轮文档中「前端 29 passed」为过期数字**，实测 25 passed：round-1 的 `isImage` 及其 4 个用例已被本轮删除。核对 `admin/src`、`addons/cms/admin`、`admin/tests` 全仓 0 引用（后端 `type=image` 过滤由 mime 判断承担），删除属正确 YAGNI 处置——该函数系 round-1 依据评审建议添加的投机代码。
+> 3. **`data-language` 不入白名单为可接受边界**（实测：Quill 2 按 `div.ql-code-block` class 识别代码块并自行回填 `data-language="plain"`；CMS 工具栏无语言选择器）。已将该边界以断言形式锁定在 `CmsLifecycleTest` 中，将来引入语言支持时该断言会失败并提示同步放开。
+> 4. 基线复核后：后端 **143 passed / 553 assertions**（本轮记录 137 + 复核新增净化保真 HTTP 用例）、前端 **25 passed**。
 
 | 项 | 严重度 | 证据 | 修复 |
 |---|---|---|---|

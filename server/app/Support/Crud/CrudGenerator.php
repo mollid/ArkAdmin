@@ -21,6 +21,8 @@ class CrudGenerator
     {
         $info = $this->addonInfo($addon);
         $n = $this->names($table, $addon);
+        // 前置校验先于任何写入：menus 标记缺失时绝不留下半生成状态
+        $this->precheckMenus($info->dir.'/database/menus.php', $table);
         $columns = (new SchemaReader)->columns($table);
         $form = array_values(array_filter($columns, fn (Column $c) => ! $c->skipForm()));
 
@@ -287,7 +289,7 @@ class CrudGenerator
      */
     protected function writeMenusEntry(string $file, string $table, string $renderedBody): void
     {
-        $content = is_file($file) ? (string) file_get_contents($file) : '';
+        $content = (string) file_get_contents($file);
         $start = "// ark:crud:{$table}:start";
         $end = "// ark:crud:{$table}:end";
         $block = $this->markerBlock($table, $renderedBody);
@@ -298,20 +300,27 @@ class CrudGenerator
 
             return;
         }
-        $genericStart = '// ark:crud:menus:start';
         $genericEnd = '// ark:crud:menus:end';
-        if (! str_contains($content, $genericStart) || ! str_contains($content, $genericEnd)) {
-            throw new CrudException(
-                "menus.php 缺少生成器标记对。请在根菜单 children 数组内加入：\n"
-                ."            {$genericStart}\n            {$genericEnd}\n然后重新执行 ark:crud"
-            );
-        }
         file_put_contents($file, (string) preg_replace(
             '/'.preg_quote($genericEnd, '/').'/',
             $block."\n".$genericEnd,
             $content,
             1
         ));
+    }
+
+    /** menus 标记前置校验（任何文件写入之前调用，防半生成状态） */
+    protected function precheckMenus(string $menusFile, string $table): void
+    {
+        $content = is_file($menusFile) ? (string) file_get_contents($menusFile) : '';
+        if (str_contains($content, "// ark:crud:{$table}:start")
+            || (str_contains($content, '// ark:crud:menus:start') && str_contains($content, '// ark:crud:menus:end'))) {
+            return;
+        }
+        throw new CrudException(
+            "menus.php 缺少生成器标记对。请在根菜单 children 数组内加入：\n"
+            ."            // ark:crud:menus:start\n            // ark:crud:menus:end\n然后重新执行 ark:crud"
+        );
     }
 
     protected function render(string $stub, array $tokens): string

@@ -101,8 +101,8 @@ it('表名必须以插件前缀开头', function () {
         ->assertExitCode(1);
 });
 
-it('menus.php 缺通用标记对时报错并给出示例', function () {
-    make_crud_addon('fy', withMenuMarkers: false);
+it('menus.php 缺通用标记对时报错且不留下半生成状态', function () {
+    $dir = make_crud_addon('fy', withMenuMarkers: false);
     Schema::dropIfExists('fy_posts');
     Schema::create('fy_posts', function (Blueprint $t) {
         $t->id();
@@ -113,4 +113,9 @@ it('menus.php 缺通用标记对时报错并给出示例', function () {
     $this->artisan('ark:crud', ['--table' => 'fy_posts', '--addon' => 'fy'])
         ->expectsOutputToContain('ark:crud:menus:start')
         ->assertExitCode(1);
+
+    // 防半生成：前置校验必须先于任何文件写入
+    expect(is_file($dir.'/src/Models/Post.php'))->toBeFalse()
+        ->and(is_file($dir.'/admin/api/post.ts'))->toBeFalse()
+        ->and(is_file($dir.'/routes/admin.php'))->toBeTrue();
 });

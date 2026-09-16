@@ -1,34 +1,34 @@
 <?php
 
-namespace Addons\fy\Services;
+namespace Addons\cms\Services;
 
-use Addons\fy\Models\Post;
+use Addons\cms\Models\Notice;
 use App\Support\Http\PgLike;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
- * ark:crud 生成（表 fy_posts）。
+ * ark:crud 生成（表 cms_notices）。
  */
-class PostService
+class NoticeService
 {
     /** @param array{keyword?:string,per_page?:int} $filters */
     public function paginate(array $filters): LengthAwarePaginator
     {
         $keyword = (string) ($filters['keyword'] ?? '');
 
-        return Post::query()
+        return Notice::query()
             ->when($keyword !== '', fn ($q) => $q->where('title', 'ilike', PgLike::wrap($keyword)))
             ->orderByDesc('id')
             ->paginate((int) ($filters['per_page'] ?? 15));
     }
 
-    public function store(array $data): Post
+    public function store(array $data): Notice
     {
-        return Post::create($data);
+        return Notice::create($data);
     }
 
-    public function update(Post $post, array $data): void
+    public function update(Notice $notice, array $data): void
     {
-        $post->update($data);
+        $notice->update($data);
     }
 }

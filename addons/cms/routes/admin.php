@@ -15,3 +15,11 @@ Route::get('articles/{id}', [ArticleController::class, 'show'])->middleware('per
 Route::post('articles', [ArticleController::class, 'store'])->middleware('permission:addon.cms.article.store');
 Route::put('articles/{id}', [ArticleController::class, 'update'])->middleware('permission:addon.cms.article.update');
 Route::delete('articles/{id}', [ArticleController::class, 'destroy'])->middleware('permission:addon.cms.article.destroy');
+
+// ark:crud:cms_notices:start
+Route::get('notices', [\Addons\cms\Http\Controllers\NoticeController::class, 'index'])->middleware('permission:addon.cms.notice.index');
+Route::get('notices/{id}', [\Addons\cms\Http\Controllers\NoticeController::class, 'show'])->middleware('permission:addon.cms.notice.index');
+Route::post('notices', [\Addons\cms\Http\Controllers\NoticeController::class, 'store'])->middleware('permission:addon.cms.notice.store');
+Route::put('notices/{id}', [\Addons\cms\Http\Controllers\NoticeController::class, 'update'])->middleware('permission:addon.cms.notice.update');
+Route::delete('notices/{id}', [\Addons\cms\Http\Controllers\NoticeController::class, 'destroy'])->middleware('permission:addon.cms.notice.destroy');
+// ark:crud:cms_notices:end

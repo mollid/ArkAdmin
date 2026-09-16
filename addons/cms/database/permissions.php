@@ -10,4 +10,10 @@ return [
     'addon.cms.article.store',
     'addon.cms.article.update',
     'addon.cms.article.destroy',
+// ark:crud:cms_notices:start
+    'addon.cms.notice.index',
+    'addon.cms.notice.store',
+    'addon.cms.notice.update',
+    'addon.cms.notice.destroy',
+// ark:crud:cms_notices:end
 ];

@@ -1,24 +1,24 @@
 <?php
 
-namespace Addons\fy\Http\Controllers;
+namespace Addons\cms\Http\Controllers;
 
-use Addons\fy\Http\Requests\PostStoreRequest;
-use Addons\fy\Http\Requests\PostUpdateRequest;
-use Addons\fy\Models\Post;
-use Addons\fy\Services\PostService;
+use Addons\cms\Http\Requests\NoticeStoreRequest;
+use Addons\cms\Http\Requests\NoticeUpdateRequest;
+use Addons\cms\Models\Notice;
+use Addons\cms\Services\NoticeService;
 use App\Http\Controllers\Controller;
 use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * ark:crud 生成（表 fy_posts）。
+ * ark:crud 生成（表 cms_notices）。
  */
-class PostController extends Controller
+class NoticeController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(protected PostService $service)
+    public function __construct(protected NoticeService $service)
     {
     }
 
@@ -34,25 +34,25 @@ class PostController extends Controller
 
     public function show(int $id): JsonResponse
     {
-        return $this->success(Post::findOrFail($id));
+        return $this->success(Notice::findOrFail($id));
     }
 
-    public function store(PostStoreRequest $request): JsonResponse
+    public function store(NoticeStoreRequest $request): JsonResponse
     {
         return $this->success(['id' => $this->service->store($request->validated())->id], '创建成功');
     }
 
-    public function update(PostUpdateRequest $request, int $id): JsonResponse
+    public function update(NoticeUpdateRequest $request, int $id): JsonResponse
     {
-        $post = Post::findOrFail($id);
-        $this->service->update($post, $request->validated());
+        $notice = Notice::findOrFail($id);
+        $this->service->update($notice, $request->validated());
 
         return $this->success(null, '更新成功');
     }
 
     public function destroy(int $id): JsonResponse
     {
-        Post::findOrFail($id)->delete();
+        Notice::findOrFail($id)->delete();
 
         return $this->success(null, '删除成功');
     }

@@ -3,7 +3,11 @@ import { ElMessage } from 'element-plus'
 
 export const TOKEN_KEY = 'ark_token'
 
-const request = axios.create({ baseURL: '/api/admin', timeout: 15000 })
+// 生产部署（如 EdgeOne Makers）前后端不同源，用 VITE_API_BASE 注入绝对地址；
+// 未配置时保持相对路径走同源（dev 由 vite proxy 把 /api 转发到 :8080）
+const baseURL = import.meta.env.VITE_API_BASE || '/api/admin'
+
+const request = axios.create({ baseURL, timeout: 15000 })
 
 request.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY)

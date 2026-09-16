@@ -24,6 +24,11 @@ class AddonUninstallCommand extends Command
         }
         $this->info("插件 [{$name}] 已卸载".($this->option('keep-data') ? '（业务表已保留）' : '，业务表已回滚'));
 
+        // 源插件带前端时，产物已被删除，但已构建的 dist 里仍有该插件的旧 chunk
+        if (is_dir(rtrim((string) config('arkadmin.addon_path'), '/')."/{$name}/admin")) {
+            $this->line('生产环境请执行 cd admin && npm run build 重新构建，以移除该插件的前端页面');
+        }
+
         return self::SUCCESS;
     }
 }

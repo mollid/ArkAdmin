@@ -3,7 +3,7 @@
     <template #header>
       <div class="card-header">
         <span>{{ t('demo.note.title') }}</span>
-        <el-button v-if="user.has('addon.demo.note.store')" type="primary" @click="dialog = true">
+        <el-button v-permission="'addon.demo.note.store'" type="primary" @click="dialog = true">
           {{ t('demo.note.create') }}
         </el-button>
       </div>
@@ -32,10 +32,8 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { noteApi, type Note } from '../../api/note'
-import { useUserStore } from '@/app/stores/user'
 
 const { t } = useI18n()
-const user = useUserStore()
 const rows = ref<Note[]>([])
 const dialog = ref(false)
 const content = ref('')

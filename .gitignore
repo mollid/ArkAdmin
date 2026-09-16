@@ -25,3 +25,6 @@ storage/*.key
 
 # 插件前端复制产物（源码在 addons/<key>/admin，安装时生成）
 admin/src/addons/
+
+# GUI 验收截图（本地产物）
+gui-test-screenshots/

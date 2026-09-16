@@ -2,7 +2,6 @@
 export default {
   note: {
     title: '便签',
-    content: '内容',
     contentRequired: '请输入便签内容',
     create: '写一条',
     empty: '还没有便签，写一条吧',

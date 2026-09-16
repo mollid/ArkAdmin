@@ -1,7 +1,7 @@
 {
     "name": "demo",
     "title": "演示插件",
-    "description": "M2 插件系统验收空插件：一张表、一个接口、一个菜单",
+    "description": "插件系统验收演示插件：一张表、一个接口、一个菜单、一个 Vue 页面",
     "version": "0.1.0",
     "type": "app",
     "support_version": "0.1.0",

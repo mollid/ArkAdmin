@@ -139,3 +139,37 @@ it('admin_path 为空视为配置错误并拒绝同步', function () {
     expect($installer->lastSyncedFrontend)->toBeNull()
         ->and(is_dir('/src/addons'))->toBeFalse();
 });
+
+it('enable 重新同步前端产物（自愈被清掉的目录）', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    make_frontend_addon('fe');
+    $installer = app(AddonInstaller::class);
+    $installer->install('fe');
+    $installer->disable('fe');
+
+    remove_dir($installer->frontendDir('fe')); // 产物被手工清掉（或未来某清理机制）
+    expect(is_dir($installer->frontendDir('fe')))->toBeFalse();
+
+    $installer->enable('fe');
+    expect(is_file($installer->frontendDir('fe').'/views/x/index.vue'))->toBeTrue();
+});
+
+it('卸载命令提示重新构建（dist 里仍有该插件旧 chunk）', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    make_frontend_addon('fe');
+    $installer = app(AddonInstaller::class);
+    $installer->install('fe');
+    $installer->disable('fe');
+
+    $this->artisan('addon:uninstall', ['name' => 'fe'])
+        ->expectsOutputToContain('重新构建')
+        ->assertExitCode(0);
+
+    // 纯后端插件卸载不提示
+    make_addon_dir('beonly');
+    app(AddonInstaller::class)->install('beonly');
+    app(AddonInstaller::class)->disable('beonly');
+    $this->artisan('addon:uninstall', ['name' => 'beonly'])
+        ->doesntExpectOutputToContain('重新构建')
+        ->assertExitCode(0);
+});

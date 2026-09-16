@@ -110,6 +110,8 @@ class AddonInstaller
         $record->update(['enabled' => true]);
         $this->hook($info, 'enable');
         $this->finish($info);
+        // 幂等补齐前端产物：手工清理过或插件源更新过时自愈（§9 验收 5“完整恢复”）
+        $this->syncFrontend($info);
     }
 
     public function disable(string $name): void

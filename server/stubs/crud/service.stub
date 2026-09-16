@@ -1,0 +1,33 @@
+<?php
+
+namespace Addons\{{ADDON}}\Services;
+
+use Addons\{{ADDON}}\Models\{{MODEL}};
+use App\Support\Http\PgLike;
+use Illuminate\Pagination\LengthAwarePaginator;
+
+/**
+ * ark:crud 生成（表 {{TABLE}}）。
+ */
+class {{MODEL}}Service
+{
+    /** @param array{keyword?:string,per_page?:int} $filters */
+    public function paginate(array $filters): LengthAwarePaginator
+    {
+        $keyword = (string) ($filters['keyword'] ?? '');
+
+        return {{MODEL}}::query(){{SEARCH_BLOCK}}
+            ->orderByDesc('id')
+            ->paginate((int) ($filters['per_page'] ?? 15));
+    }
+
+    public function store(array $data): {{MODEL}}
+    {
+        return {{MODEL}}::create($data);
+    }
+
+    public function update({{MODEL}} ${{VAR}}, array $data): void
+    {
+        ${{VAR}}->update($data);
+    }
+}

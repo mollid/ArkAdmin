@@ -1,0 +1,59 @@
+<?php
+
+namespace Addons\{{ADDON}}\Http\Controllers;
+
+use Addons\{{ADDON}}\Http\Requests\{{MODEL}}StoreRequest;
+use Addons\{{ADDON}}\Http\Requests\{{MODEL}}UpdateRequest;
+use Addons\{{ADDON}}\Models\{{MODEL}};
+use Addons\{{ADDON}}\Services\{{MODEL}}Service;
+use App\Http\Controllers\Controller;
+use App\Support\Http\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * ark:crud 生成（表 {{TABLE}}）。
+ */
+class {{MODEL}}Controller extends Controller
+{
+    use ApiResponse;
+
+    public function __construct(protected {{MODEL}}Service $service)
+    {
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:100',
+            'keyword' => 'nullable|string|max:191',
+        ]);
+
+        return $this->paginate($this->service->paginate($request->only(['keyword', 'per_page'])));
+    }
+
+    public function show(int $id): JsonResponse
+    {
+        return $this->success({{MODEL}}::findOrFail($id));
+    }
+
+    public function store({{MODEL}}StoreRequest $request): JsonResponse
+    {
+        return $this->success(['id' => $this->service->store($request->validated())->id], '创建成功');
+    }
+
+    public function update({{MODEL}}UpdateRequest $request, int $id): JsonResponse
+    {
+        ${{VAR}} = {{MODEL}}::findOrFail($id);
+        $this->service->update(${{VAR}}, $request->validated());
+
+        return $this->success(null, '更新成功');
+    }
+
+    public function destroy(int $id): JsonResponse
+    {
+        {{MODEL}}::findOrFail($id)->delete();
+
+        return $this->success(null, '删除成功');
+    }
+}

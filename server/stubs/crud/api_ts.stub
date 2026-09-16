@@ -1,0 +1,17 @@
+import request from '@/app/api/request'
+
+/* ark:crud 生成（表 {{TABLE}}） */
+
+export interface {{MODEL}}Row {
+{{INTERFACE_FIELDS}}
+}
+
+export const {{VAR}}Api = {
+  // 列表不含长文本列（编辑经 show 取全量）
+  list: (params: Record<string, unknown>) =>
+    request.get<never, { list: {{MODEL}}Row[]; total: number }>('/addon/{{ADDON}}/{{ROUTE_PATH}}', { params }),
+  show: (id: number) => request.get<never, {{MODEL}}Row>(`/addon/{{ADDON}}/{{ROUTE_PATH}}/${id}`),
+  store: (data: Partial<{{MODEL}}Row>) => request.post<never, { id: number }>('/addon/{{ADDON}}/{{ROUTE_PATH}}', data),
+  update: (id: number, data: Partial<{{MODEL}}Row>) => request.put<never, unknown>(`/addon/{{ADDON}}/{{ROUTE_PATH}}/${id}`, data),
+  destroy: (id: number) => request.delete<never, unknown>(`/addon/{{ADDON}}/{{ROUTE_PATH}}/${id}`),
+}

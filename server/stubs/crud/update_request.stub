@@ -1,0 +1,23 @@
+<?php
+
+namespace Addons\{{ADDON}}\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+/**
+ * ark:crud 生成（表 {{TABLE}}）。PUT 部分语义：所有字段一律 sometimes（M4 I1 教训）。
+ */
+class {{MODEL}}UpdateRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+{{RULES_UPDATE}}
+        ];
+    }
+}

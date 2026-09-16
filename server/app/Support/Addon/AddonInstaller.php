@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -17,9 +18,7 @@ use Spatie\Permission\PermissionRegistrar;
  */
 class AddonInstaller
 {
-    public function __construct(protected AddonManager $manager)
-    {
-    }
+    public function __construct(protected AddonManager $manager) {}
 
     /** 安装：校验 → 迁移 → 注册（启用态）→ 菜单 → 权限 → install 钩子 */
     public function install(string $name): Addon
@@ -133,6 +132,25 @@ class AddonInstaller
 
     /** 最近一次前端同步的目标路径；null 表示无前端或同步失败（命令据此决定是否提示构建） */
     public ?string $lastSyncedFrontend = null;
+
+    /**
+     * ark:crud 收尾（§10 M5）：把生成器追加进 menus.php/permissions.php 的内容写入 DB
+     * 并自愈前端产物。幂等：syncMenus 是 updateOrCreate、createPermissions 是 firstOrCreate；
+     * 仅限已安装插件（未安装时菜单/权限由 install 流程负责）。
+     */
+    public function refreshMenusAndPermissions(string $name): void
+    {
+        $record = Addon::find($name);
+        if ($record === null) {
+            throw new AddonException("插件 [{$name}] 未安装，无法刷新菜单与权限");
+        }
+        $info = $this->mustExistOnDisk($name);
+        $permissions = $this->syncMenus($info);
+        $this->createPermissions($info, array_values(array_unique(array_merge(
+            $permissions, $this->declaredPermissions($info)
+        ))));
+        $this->syncFrontend($info);
+    }
 
     /** 插件前端产物目录：<admin_path>/src/addons/<name> */
     public function frontendDir(string $addonName): string
@@ -328,7 +346,7 @@ class AddonInstaller
         // RbacSeeder 语义（超管 = 全部权限）在插件安装时的延续：接口层有 Gate::before 旁路，
         // 但前端 has() 是字符串包含检查，不授予则按钮级权限失效。
         // 增量授予而非全量 syncPermissions——不覆盖运维对超管角色的手工回收
-        $super = \Spatie\Permission\Models\Role::where('name', config('arkadmin.super_role', 'super_admin'))
+        $super = Role::where('name', config('arkadmin.super_role', 'super_admin'))
             ->where('guard_name', 'admin')->first();
         if ($super !== null && $names !== []) {
             $super->givePermissionTo($names);

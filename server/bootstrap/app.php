@@ -1,9 +1,23 @@
 <?php
 
+use App\Admin\Models\Admin;
+use App\Providers\AddonBootServiceProvider;
+use App\Support\Addon\Console\AddonCacheCommand;
+use App\Support\Addon\Console\AddonClearCommand;
+use App\Support\Addon\Console\AddonDisableCommand;
+use App\Support\Addon\Console\AddonEnableCommand;
+use App\Support\Addon\Console\AddonInstallCommand;
+use App\Support\Addon\Console\AddonListCommand;
+use App\Support\Addon\Console\AddonUninstallCommand;
+use App\Support\Crud\Console\ArkCrudCommand;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,34 +26,35 @@ $app = Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withProviders([\App\Providers\AddonBootServiceProvider::class])
+    ->withProviders([AddonBootServiceProvider::class])
     ->withCommands([
-        \App\Support\Addon\Console\AddonListCommand::class,
-        \App\Support\Addon\Console\AddonInstallCommand::class,
-        \App\Support\Addon\Console\AddonUninstallCommand::class,
-        \App\Support\Addon\Console\AddonEnableCommand::class,
-        \App\Support\Addon\Console\AddonDisableCommand::class,
-        \App\Support\Addon\Console\AddonCacheCommand::class,
-        \App\Support\Addon\Console\AddonClearCommand::class,
+        AddonListCommand::class,
+        AddonInstallCommand::class,
+        AddonUninstallCommand::class,
+        AddonEnableCommand::class,
+        AddonDisableCommand::class,
+        AddonCacheCommand::class,
+        AddonClearCommand::class,
+        ArkCrudCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // API-only：未认证请求不做 web 登录跳转（默认 redirectGuestsTo(route('login')) 会因无该路由抛 500）
         $middleware->redirectGuestsTo(null);
         $middleware->alias([
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'permission' => PermissionMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $envelope = fn (int $code, string $msg, $data = null) => response()->json(
             ['code' => $code, 'data' => $data, 'msg' => $msg], $code === 401 ? 401 : ($code === 422 ? 422 : 200)
         );
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) use ($envelope) {
+        $exceptions->render(function (AuthenticationException $e, $request) use ($envelope) {
             return $envelope(401, $e->getMessage() ?: '未登录或登录已过期');
         });
-        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) use ($envelope) {
+        $exceptions->render(function (ValidationException $e, $request) use ($envelope) {
             return $envelope(422, $e->getMessage(), $e->errors());
         });
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, $request) use ($envelope) {
+        $exceptions->render(function (HttpExceptionInterface $e, $request) use ($envelope) {
             return $envelope($e->getStatusCode(), $e->getMessage() ?: '请求错误');
         });
     })->create();
@@ -47,7 +62,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
 // 超管旁路：super_admin 角色通过任何 Gate 检查（Laravel v13 无 withGate，以 booting 钩子等效注册）
 $app->booting(function () {
     Gate::before(function ($user, string $ability) {
-        return $user instanceof \App\Admin\Models\Admin
+        return $user instanceof Admin
             && $user->hasRole(config('arkadmin.super_role', 'super_admin')) ? true : null;
     });
 });

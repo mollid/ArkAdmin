@@ -51,3 +51,17 @@ NiuShop/niucloud-admin 浅克隆（最新提交 91ef604）：ThinkPHP 8 + PHP 8 
 - Docker 29.6.2 + Compose v5.3.1 可用；Docker Hub 直连慢，用国内镜像 `docker.1panel.live`（已验证）
 - Node v22 可用；PHP 与 Composer 未装，PHP 相关操作走 Docker 容器
 - Gitee 克隆正常；npm 腾讯镜像源、Composer 阿里云镜像源可用
+
+## Agent skills
+
+### Issue tracker
+
+Issues 以本地 markdown 文件形式存放在 `.scratch/<feature>/` 目录下。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用五个规范 triage 角色标签，标签字符串与角色名相同。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文（single-context）布局：根目录 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。

@@ -30,9 +30,4 @@ export default {
     clearCover: '清除',
     deleteConfirm: '确认删除文章 {title}？',
   },
-// ark:crud:cms_notices:start
-  cms.notice: {
-    title: 'Notices',
-  },
-// ark:crud:cms_notices:end
 }

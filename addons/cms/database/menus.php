@@ -20,14 +20,7 @@ return [
                 'permission' => 'addon.cms.article.index', 'sort' => 2,
             ],
             // ark:crud:menus:start
-            // ark:crud:cms_notices:start
-            [
-                'name' => 'cms.notice', 'title' => 'Notices', 'icon' => 'Document',
-                'route_path' => '/cms/notice', 'view_path' => 'notice/index',
-                'permission' => 'addon.cms.notice.index', 'sort' => 10,
-            ],
-// ark:crud:cms_notices:end
-// ark:crud:menus:end
+            // ark:crud:menus:end
         ],
     ],
 ];

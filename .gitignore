@@ -7,6 +7,9 @@ node_modules/
 vendor/
 admin/dist/
 
+# storage:link 生成的软链（Laravel 惯例，入版本库无意义）
+/server/public/storage/
+
 # 环境与编辑器
 .env
 .env.*

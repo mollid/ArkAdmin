@@ -4,6 +4,7 @@ namespace App\Admin\Http\Controllers;
 
 use App\Admin\Models\Attachment;
 use App\Admin\Services\AttachmentService;
+use App\Support\Http\PgLike;
 use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,9 +14,7 @@ class AttachmentController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(protected AttachmentService $service)
-    {
-    }
+    public function __construct(protected AttachmentService $service) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -27,7 +26,7 @@ class AttachmentController extends Controller
         $q = Attachment::query()
             // PG 的 LIKE 默认转义符是反斜杠；%/_/\ 按字面量匹配
             ->when($request->filled('keyword'), fn ($q) => $q->where('name', 'ilike',
-                \App\Support\Http\PgLike::wrap((string) $request->input('keyword'))))
+                PgLike::wrap((string) $request->input('keyword'))))
             ->when($request->input('type') === 'image', fn ($q) => $q->where('mime', 'like', 'image/%'))
             ->orderByDesc('id');
 

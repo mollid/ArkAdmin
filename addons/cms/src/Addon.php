@@ -36,19 +36,11 @@ class Addon implements Lifecycle
      * 清理由迁移回滚负责；--keep-data 卸载时本钩子同样会被调用，
      * 因此这里绝不能删数据，保持空实现（§6.3 语义）。
      */
-    public function uninstall(): void
-    {
-    }
+    public function uninstall(): void {}
 
-    public function enable(): void
-    {
-    }
+    public function enable(): void {}
 
-    public function disable(): void
-    {
-    }
+    public function disable(): void {}
 
-    public function upgrade(string $fromVersion): void
-    {
-    }
+    public function upgrade(string $fromVersion): void {}
 }

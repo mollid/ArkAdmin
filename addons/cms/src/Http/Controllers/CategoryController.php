@@ -14,9 +14,7 @@ class CategoryController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(protected CategoryService $service)
-    {
-    }
+    public function __construct(protected CategoryService $service) {}
 
     public function index(): JsonResponse
     {

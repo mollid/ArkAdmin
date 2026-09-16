@@ -42,6 +42,7 @@ class AdminController extends Controller
         $roles = Role::where('guard_name', 'admin')->whereIn('id', $data['roles'] ?? [])->get();
         $admin = Admin::create($data);
         $admin->syncRoles($roles);
+
         return $this->success(['id' => $admin->id], '创建成功');
     }
 
@@ -59,6 +60,7 @@ class AdminController extends Controller
         $model->update($data);
         $roles = Role::where('guard_name', 'admin')->whereIn('id', $data['roles'] ?? [])->get();
         $model->syncRoles($roles);
+
         return $this->success(null, '更新成功');
     }
 
@@ -73,6 +75,7 @@ class AdminController extends Controller
             return $this->fail(1, '不能删除最后一个超级管理员');
         }
         $model->delete();
+
         return $this->success(null, '删除成功');
     }
 }

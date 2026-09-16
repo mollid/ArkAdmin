@@ -1,15 +1,20 @@
 <?php
 
 use App\Admin\Events\AttachmentSaved;
+use App\Admin\Models\Admin;
 use App\Admin\Models\Attachment;
+use App\Admin\Models\Menu;
+use App\Admin\Seeds\MenuSeeder;
+use App\Admin\Seeds\RbacSeeder;
 use App\Admin\Services\MenuService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
-    (new App\Admin\Seeds\RbacSeeder)->run();
-    (new App\Admin\Seeds\MenuSeeder)->run();
+    (new RbacSeeder)->run();
+    (new MenuSeeder)->run();
     Storage::fake('public');
 });
 
@@ -96,7 +101,7 @@ it('删除：行与文件一起删', function () {
 });
 
 it('无 system.attachment.* 权限返回 403 信封', function () {
-    App\Admin\Models\Admin::create(['username' => 'plain', 'password' => 'x123456', 'status' => 1]);
+    Admin::create(['username' => 'plain', 'password' => 'x123456', 'status' => 1]);
     $token = $this->postJson('/api/admin/auth/login', ['username' => 'plain', 'password' => 'x123456'])
         ->json('data.token');
 
@@ -110,16 +115,16 @@ it('无 system.attachment.* 权限返回 403 信封', function () {
 
 it('RbacSeeder 种出 attachment 权限且超管拥有；MenuSeeder 种出素材库菜单', function () {
     foreach (['index', 'store', 'destroy'] as $act) {
-        $p = Spatie\Permission\Models\Permission::where('name', "system.attachment.{$act}")
+        $p = Permission::where('name', "system.attachment.{$act}")
             ->where('guard_name', 'admin')->first();
         expect($p)->not->toBeNull()->and($p->module)->toBe('system');
     }
     expect(super_admin()->hasPermissionTo('system.attachment.index'))->toBeTrue()
         ->and(menu_tree_names((new MenuService)->treeFor(super_admin())))->toContain('attachment')
-        ->and(App\Admin\Models\Menu::where('name', 'attachment')->value('permission'))
+        ->and(Menu::where('name', 'attachment')->value('permission'))
         ->toBe('system.attachment.index');
 
     // 无权限账号看不到素材库菜单
-    $u = App\Admin\Models\Admin::create(['username' => 'noperm', 'password' => 'x123456', 'status' => 1]);
+    $u = Admin::create(['username' => 'noperm', 'password' => 'x123456', 'status' => 1]);
     expect(menu_tree_names((new MenuService)->treeFor($u)))->not->toContain('attachment');
 });

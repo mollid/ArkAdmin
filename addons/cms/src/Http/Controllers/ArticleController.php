@@ -9,16 +9,15 @@ use Addons\cms\Services\ArticleService;
 use App\Http\Controllers\Controller;
 use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ArticleController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(protected ArticleService $service)
-    {
-    }
+    public function __construct(protected ArticleService $service) {}
 
-    public function index(\Illuminate\Http\Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $request->validate([
             'per_page' => 'nullable|integer|min:1|max:100',

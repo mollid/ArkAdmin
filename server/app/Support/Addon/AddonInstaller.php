@@ -323,11 +323,14 @@ class AddonInstaller
                 ['module' => $info->name]
             );
         }
-        // RbacSeeder 语义（super_admin = 全部权限）在插件安装时的延续：
-        // 接口层有 Gate::before 旁路，但前端 has() 是字符串包含检查，不同步则按钮级权限失效
-        $super = \Spatie\Permission\Models\Role::where('name', 'super_admin')
+        // RbacSeeder 语义（超管 = 全部权限）在插件安装时的延续：接口层有 Gate::before 旁路，
+        // 但前端 has() 是字符串包含检查，不授予则按钮级权限失效。
+        // 增量授予而非全量 syncPermissions——不覆盖运维对超管角色的手工回收
+        $super = \Spatie\Permission\Models\Role::where('name', config('arkadmin.super_role', 'super_admin'))
             ->where('guard_name', 'admin')->first();
-        $super?->syncPermissions(Permission::where('guard_name', 'admin')->pluck('name'));
+        if ($super !== null && $names !== []) {
+            $super->givePermissionTo($names);
+        }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 

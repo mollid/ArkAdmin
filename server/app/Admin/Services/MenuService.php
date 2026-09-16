@@ -13,7 +13,7 @@ class MenuService
     public function treeFor(Admin $admin): array
     {
         $perms = null;
-        if (!$admin->hasRole('super_admin')) {
+        if (!$admin->hasRole(config('arkadmin.super_role', 'super_admin'))) {
             $perms = $admin->getAllPermissions()->pluck('name')->flip();
         }
 

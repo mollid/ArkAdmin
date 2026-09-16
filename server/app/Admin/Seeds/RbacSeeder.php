@@ -23,7 +23,9 @@ class RbacSeeder
             }
         }
 
-        $super = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'admin']);
+        $super = Role::firstOrCreate(
+            ['name' => config('arkadmin.super_role', 'super_admin'), 'guard_name' => 'admin']
+        );
         $super->syncPermissions(Permission::where('guard_name', 'admin')->pluck('name'));
 
         Admin::firstOrCreate(

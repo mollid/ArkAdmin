@@ -105,6 +105,18 @@ it('状态机：启用时禁止卸载/重复启用，禁用时禁止再禁用', 
     expect(fn () => $installer->disable('demo'))->toThrow(AddonException::class);
 });
 
+it('安装插件增量授予超管新权限，不覆盖已手工回收的权限', function () {
+    $role = \Spatie\Permission\Models\Role::where('name', 'super_admin')
+        ->where('guard_name', 'admin')->first();
+    $role->revokePermissionTo('system.menu.destroy'); // 模拟运维对超管的手工收紧
+
+    app(AddonInstaller::class)->install('demo');
+
+    $role->refresh();
+    expect($role->hasPermissionTo('addon.demo.note.store'))->toBeTrue()  // 新权限自动授予
+        ->and($role->hasPermissionTo('system.menu.destroy'))->toBeFalse(); // 收紧不被覆盖
+});
+
 it('卸载：注册行/菜单/权限清除且业务表回滚', function () {
     $installer = app(AddonInstaller::class);
     $installer->install('demo');

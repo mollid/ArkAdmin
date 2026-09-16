@@ -8,6 +8,7 @@ use App\Support\Http\PgLike;
 use App\Support\Http\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Controller;
 
 class AttachmentController extends Controller
@@ -36,10 +37,17 @@ class AttachmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            // mimes 按文件内容嗅探扩展名（不信任客户端提供的文件名/类型）
             'file' => ['required', 'file',
                 'max:'.(int) config('arkadmin.attachment.max_size', 10240),
-                'mimes:'.implode(',', (array) config('arkadmin.attachment.extensions'))],
+                // 白名单按 finfo 内容嗅探的 mime 判断：客户端 mime/文件名均可伪造，不作依据
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $mimes = (array) config('arkadmin.attachment.mimes', []);
+                    $sniffed = $value instanceof UploadedFile
+                        ? AttachmentService::sniffedMime($value) : '';
+                    if (! array_key_exists($sniffed, $mimes)) {
+                        $fail('文件类型不在允许范围内');
+                    }
+                }],
         ], [], ['file' => '文件']);
 
         return $this->success(

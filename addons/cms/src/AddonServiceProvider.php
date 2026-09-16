@@ -2,10 +2,16 @@
 
 namespace Addons\cms;
 
+use Addons\cms\Listeners\ClearDeletedCover;
+use App\Admin\Events\AttachmentDeleted;
 use App\Support\Addon\AddonServiceProvider as BaseProvider;
 
 class AddonServiceProvider extends BaseProvider
 {
-    // CMS 暂无事件监听；如需监听框架埋点（如 AttachmentSaved），登记到 $listen 即可
-    protected array $listen = [];
+    /** 监听框架公开埋点：素材删除时清空文章封面引用 */
+    protected array $listen = [
+        AttachmentDeleted::class => [
+            ClearDeletedCover::class,
+        ],
+    ];
 }

@@ -1,6 +1,6 @@
 <template>
   <el-dialog :model-value="modelValue" :title="t('common.choose')" width="720px"
-    @update:model-value="(v: boolean) => emit('update:modelValue', v)" @open="load(1)">
+    @update:model-value="onVisibleChange" @open="load(1)">
     <div class="toolbar">
       <el-input v-model="keyword" clearable :placeholder="t('common.search')" style="width: 200px"
         @keyup.enter="load(1)" @clear="load(1)" />
@@ -13,12 +13,12 @@
 
     <el-empty v-if="!rows.length" />
     <div v-else class="grid">
-      <div v-for="row in rows" :key="row.id" class="cell" :class="{ picked: checked.has(row.id) }"
+      <div v-for="row in rows" :key="row.id" class="cell" :class="{ picked: picked.has(row.id) }"
         @click="toggle(row)">
         <el-image :src="row.url" fit="cover" class="thumb"
           :preview-src-list="[row.url]" preview-teleported hide-on-click-modal @click.stop />
         <div class="name" :title="row.name">{{ row.name }}</div>
-        <el-checkbox v-if="multiple" :model-value="checked.has(row.id)" @click.stop
+        <el-checkbox v-if="multiple" :model-value="picked.has(row.id)" @click.stop
           @change="toggle(row)" />
       </div>
     </div>
@@ -28,7 +28,7 @@
 
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button v-if="multiple" type="primary" :disabled="!checked.size" @click="confirmMulti">
+      <el-button v-if="multiple" type="primary" :disabled="!picked.size" @click="confirmMulti">
         {{ t('common.confirm') }}
       </el-button>
     </template>
@@ -53,7 +53,8 @@ const rows = ref<AttachmentRow[]>([])
 const total = ref(0)
 const page = ref(1)
 const keyword = ref('')
-const checked = reactive(new Set<number>())
+// 跨页累积已选（key=id）：多选翻页不丢，确认时按累积集合输出
+const picked = reactive(new Map<number, AttachmentRow>())
 
 async function load(p?: number) {
   if (p) page.value = p
@@ -62,18 +63,23 @@ async function load(p?: number) {
   total.value = data.total
 }
 
+function onVisibleChange(v: boolean) {
+  emit('update:modelValue', v)
+  if (!v) picked.clear() // 关闭即清空，避免下次打开残留勾选
+}
+
 function toggle(row: AttachmentRow) {
   if (!props.multiple) {
     emit('confirm', [row])
     emit('update:modelValue', false)
     return
   }
-  checked.has(row.id) ? checked.delete(row.id) : checked.add(row.id)
+  picked.has(row.id) ? picked.delete(row.id) : picked.set(row.id, row)
 }
 
 function confirmMulti() {
-  emit('confirm', rows.value.filter((r) => checked.has(r.id)))
-  checked.clear()
+  emit('confirm', [...picked.values()])
+  picked.clear()
   emit('update:modelValue', false)
 }
 

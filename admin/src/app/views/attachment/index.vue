@@ -81,7 +81,11 @@ async function remove(row: AttachmentRow) {
   } catch {
     return // 用户取消确认
   }
-  await attachmentApi.destroy(row.id)
+  try {
+    await attachmentApi.destroy(row.id)
+  } catch {
+    return // 删除失败已由拦截器提示
+  }
   ElMessage.success(t('common.success'))
   load()
 }

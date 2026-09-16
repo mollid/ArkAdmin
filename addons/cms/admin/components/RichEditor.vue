@@ -41,18 +41,24 @@ onMounted(() => {
       },
     },
   })
-  quill.root.innerHTML = props.modelValue
+  replaceContent(props.modelValue)
   quill.on('text-change', () => {
     if (silent) return
     emit('update:modelValue', quill!.root.innerHTML)
   })
 })
 
+/** 经 clipboard.convert → setContents 走 Quill 数据模型写入，勿直改 root.innerHTML（绕过 Delta 会失步） */
+function replaceContent(html: string) {
+  if (!quill) return
+  silent = true
+  quill.setContents(quill.clipboard.convert({ html }))
+  silent = false
+}
+
 watch(() => props.modelValue, (v) => {
   if (quill && v !== quill.root.innerHTML) {
-    silent = true
-    quill.root.innerHTML = v
-    silent = false
+    replaceContent(v)
   }
 })
 

@@ -5,31 +5,34 @@ namespace Addons\cms;
 use Addons\cms\Models\Article;
 use Addons\cms\Models\Category;
 use App\Support\Addon\Contracts\Lifecycle;
+use Illuminate\Support\Facades\DB;
 
 class Addon implements Lifecycle
 {
     /** 迁移已由框架执行完毕；此处做种子数据（§6.3）。幂等：已有数据则不重灌 */
     public function install(): void
     {
-        if (Category::count() === 0) {
-            Category::create([
-                'name' => '默认栏目',
-                'description' => '安装 CMS 时自动创建',
-                'sort' => 0,
-            ]);
-        }
-        if (Article::count() === 0) {
-            Article::create([
-                'category_id' => (int) (Category::query()->min('id') ?? 0),
-                'title' => '欢迎使用内容管理',
-                'summary' => 'CMS 插件安装时生成的示例文章',
-                'content' => '<p>这是一篇安装时生成的示例文章，用于验证富文本渲染。</p>'
-                    .'<p>你可以在「文章管理」中编辑或删除它。</p>',
-                'tags' => ['示例'],
-                'status' => 1,
-                'published_at' => now(),
-            ]);
-        }
+        DB::transaction(function (): void {
+            if (Category::count() === 0) {
+                Category::create([
+                    'name' => '默认栏目',
+                    'description' => '安装 CMS 时自动创建',
+                    'sort' => 0,
+                ]);
+            }
+            if (Article::count() === 0) {
+                Article::create([
+                    'category_id' => (int) (Category::query()->min('id') ?? 0),
+                    'title' => '欢迎使用内容管理',
+                    'summary' => 'CMS 插件安装时生成的示例文章',
+                    'content' => '<p>这是一篇安装时生成的示例文章，用于验证富文本渲染。</p>'
+                        .'<p>你可以在「文章管理」中编辑或删除它。</p>',
+                    'tags' => ['示例'],
+                    'status' => 1,
+                    'published_at' => now(),
+                ]);
+            }
+        });
     }
 
     /**

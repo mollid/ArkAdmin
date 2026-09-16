@@ -140,9 +140,8 @@ const dialog = reactive({
     content: '', cover: '', tags: [] as string[], status: 1 },
 })
 
-const categoryOptions = computed<CategoryNode[]>(() => [
-  { id: 0, parent_id: 0, name: '未分类', description: '', sort: 0, is_show: true, article_count: 0, children: categories.value },
-])
+// 树选数据源即栏目树：不注入"未分类"伪节点——后端过滤把 0 当空值、表单提交 0 会被 exists 规则拒绝
+const categoryOptions = computed<CategoryNode[]>(() => categories.value)
 
 const canSave = computed(() => !!dialog.form.title.trim() && dialog.form.category_id !== undefined)
 
@@ -207,7 +206,7 @@ async function save() {
 
 async function remove(row: ArticleRow) {
   try {
-    await ElMessageBox.confirm(`确认删除文章 ${row.title}？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('cms.article.deleteConfirm', { title: row.title }), '提示', { type: 'warning' })
   } catch {
     return // 用户取消确认
   }

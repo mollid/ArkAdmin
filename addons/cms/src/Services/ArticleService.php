@@ -3,11 +3,14 @@
 namespace Addons\cms\Services;
 
 use Addons\cms\Models\Article;
+use Addons\cms\Support\RichTextSanitizer;
 use App\Support\Http\PgLike;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class ArticleService
 {
+    public function __construct(protected CategoryService $categories) {}
+
     /** @param array{keyword?:string,category_id?:int,status?:int,per_page?:int} $filters */
     public function paginate(array $filters): LengthAwarePaginator
     {
@@ -15,7 +18,10 @@ class ArticleService
 
         return Article::query()->with('category:id,name')
             ->when($keyword !== '', fn ($q) => $q->where('title', 'ilike', PgLike::wrap($keyword)))
-            ->when(! empty($filters['category_id']), fn ($q) => $q->where('category_id', (int) $filters['category_id']))
+            // 按栏目过滤含子栏目，与栏目树 article_count（含子孙）语义一致
+            ->when(! empty($filters['category_id']), function ($q) use ($filters) {
+                $q->whereIn('category_id', $this->categories->subtreeIds((int) $filters['category_id']));
+            })
             ->when(isset($filters['status']) && $filters['status'] !== '', fn ($q) => $q->where('status', (int) $filters['status']))
             ->orderByDesc('id')
             ->paginate((int) ($filters['per_page'] ?? 15));
@@ -23,27 +29,47 @@ class ArticleService
 
     public function store(array $data): Article
     {
-        return Article::create($this->normalize($data));
+        return Article::create($this->normalizeForStore($data));
     }
 
     public function update(Article $article, array $data): void
     {
-        $article->update($this->normalize($data));
+        $article->update($this->normalizeForUpdate($article, $data));
     }
 
-    /**
-     * 发布流收口：置为发布且未显式给时间 → now()；回草稿 → 清空发布时间。
-     * tags 缺省 []，避免 jsonb 列出现 null。
-     */
-    protected function normalize(array $data): array
+    /** 新建：全量语义（tags 缺省 []，发布即落发布时间，content 净化） */
+    protected function normalizeForStore(array $data): array
     {
         $data['tags'] = array_values($data['tags'] ?? []);
         $status = (int) ($data['status'] ?? 0);
-        if ($status === 1 && empty($data['published_at'])) {
-            $data['published_at'] = now();
+        $data['published_at'] = $status === 1 ? ($data['published_at'] ?? now()) : null;
+        if (array_key_exists('content', $data)) {
+            $data['content'] = RichTextSanitizer::clean((string) $data['content']);
         }
-        if ($status !== 1) {
-            $data['published_at'] = null;
+
+        return $data;
+    }
+
+    /**
+     * 更新：PUT 部分语义，仅处理显式提交的字段——
+     * 不传 tags 不清空；status=1 仅在文章从未发布过时落发布时间（编辑已发布文章不刷新时间）；回草稿清空。
+     */
+    protected function normalizeForUpdate(Article $article, array $data): array
+    {
+        if (array_key_exists('tags', $data)) {
+            $data['tags'] = array_values($data['tags']);
+        }
+        if (array_key_exists('content', $data)) {
+            $data['content'] = RichTextSanitizer::clean((string) $data['content']);
+        }
+        if (array_key_exists('status', $data)) {
+            $status = (int) $data['status'];
+            if ($status === 1 && $article->published_at === null) {
+                $data['published_at'] = now();
+            }
+            if ($status !== 1) {
+                $data['published_at'] = null;
+            }
         }
 
         return $data;

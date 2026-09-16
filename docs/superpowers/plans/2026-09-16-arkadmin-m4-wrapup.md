@@ -52,9 +52,24 @@ M4 新增测试文件/用例组：
 5. 权限裁剪账号：侧边栏仅见文章不见栏目（对应 §9-3 自动化）
 6. CLI `addon:disable cms` → 刷新菜单消失；`addon:enable` → 恢复；`addon:uninstall` → 菜单/表/前端产物清除
 
-## 评审轮记录
+## 评审轮记录（2026-09-16，新视角代码评审后加固）
 
-（待新视角代码评审后补充）
+评审结论 1 Critical / 6 Important / 9 Minor。核实后全部接受并修复（除按 YAGNI 降级两项，见末尾）。修复后全量：后端 **130 passed / 490 assertions**、前端 **29 passed**、`vue-tsc -b` + `npm run build` 通过。
+
+| 项 | 严重度 | 修复 |
+|---|---|---|
+| 栏目树 `nest` 每节点对子树递归两次（一次求文章数一次取 children），深层树指数级调用可挂死 categories 接口（认证后低成本 DoS） | Critical | 先算一次 `children` 复用求和；节点索引改为 `groupBy('parent_id')` 预建，整体 O(n)；新增 30 层链回归用例 |
+| `normalize` 破坏 PUT 部分语义：不传 tags 被清空；已发布文章每次编辑 `published_at` 被刷新为当前时间 | Important | 拆分 `normalizeForStore/normalizeForUpdate`：仅处理显式提交的字段；发布时间只在"首次发布"落 now()，转草稿清空；新增 PUT 部分语义回归用例 |
+| 富文本 content 原样入库 + RichEditor `innerHTML` 直插 → 低权编辑者可注入存储型脚本（管理员打开编辑时执行） | Important | 新增 `Addons\cms\Support\RichTextSanitizer`（DOMDocument 白名单：允许 Quill 产出标签、script/style/iframe/svg 整棵丢弃、事件属性剥离、href/src 仅安全协议），store/update 入库前收口 + 载荷回归用例；RichEditor 改 `clipboard.convert → setContents` 走 Quill 数据模型（兼修直改 DOM 失步） |
+| 附件删除无引用联动：CMS 封面成死链且无 `attachment.deleted` 埋点 | Important | 框架新增公开埋点 `AttachmentDeleted`（§5.5 事件清单）；CMS `ClearDeletedCover` 监听清空引用该素材的封面（正文插图 URL 无法反查，记录为已知限制）；联动用例覆盖 |
+| 栏目树 `article_count`（含子孙）与文章列表过滤（精确栏目）语义不一致 | Important | 列表过滤改为 `whereIn(subtreeIds)` 含子孙，与树计数一致；新增跨级计数 + 过滤断言 |
+| `AttachmentPicker` 多选跨页丢选择、关闭后残留勾选 | Important | 改 `Map` 累积跨页选择；对话框关闭即清空 |
+| 上传白名单实际走客户端可伪造的 mime 链（Laravel `mimes` 规则经 `guessExtension` 取客户端 mime，实测 `.php` 名 PNG 被嗅探为 `application/x-php`） | Important（评审后实测升级） | 弃用 `mimes` 规则：config 改「内容嗅探 mime → 扩展名」映射表，finfo 嗅探统一收口 `AttachmentService::sniffedMime`，入库 mime/扩展名均以内容为准；新增双向用例（JPEG 内容配 `.php` 名 → 存 .jpg；PHP 内容配 `.png` 名 → 422） |
+| `getClientOriginalExtension` 回退为不信任输入的死代码；`getimagesize` 对非本地磁盘会炸；文件删除失败静默；install 种子无事务；素材库页删除无 try/catch；文章页「未分类」过滤项语义误导；i18n 硬编码；正文净化归属未记录 | Minor | 逐一修复/带过：删回退、限 local 磁盘取宽高、删除失败记 warning、种子包 `DB::transaction`、补 catch、去伪节点 + deleteConfirm 键、归属写入本记录 |
+
+**降级/拒绝项**：`cover_url` 不反查 `attachments.disk` 列（封面统一默认素材盘，文档化）；正文插图死链的反查清理（URL 无引用登记，留待素材引用表方案）。
+
+**已知覆盖边界**：`RichTextSanitizer` 为自研白名单净化，面向内部低权编辑者威胁模型，不承诺对抗专业 mXSS；富文本净化责任方（服务端收口）已在此定责，后续插件沿用该类或自建。
 
 ## 遗留与后续
 

@@ -10,7 +10,9 @@ use App\Admin\Services\MenuService;
 use App\Support\Addon\AddonInstaller;
 use App\Support\Addon\AddonManager;
 use App\Support\Addon\Models\Addon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -235,6 +237,116 @@ it('文章：无 addon.cms.article.* 权限 403', function () {
         ->assertOk()->assertJsonPath('code', 403);
     $this->postJson('/api/admin/addon/cms/articles', ['category_id' => $cid, 'title' => 'x', 'status' => 0],
         ['Authorization' => "Bearer {$t2}"])->assertOk()->assertJsonPath('code', 403);
+});
+
+// —— 评审轮回归：PUT 部分语义 / 树深度 / 富文本净化 / 素材删除联动 ——
+
+it('文章 PUT 部分语义：不传 tags 不清空；编辑已发布文章不刷新发布时间；转草稿清空', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+    $cid = Category::first()->id;
+    $aid = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $cid, 'title' => '语义稿', 'tags' => ['保留'], 'status' => 1,
+    ], $headers)->json('data.id');
+
+    $before = Article::findOrFail($aid)->published_at;
+
+    // 不带 tags 的全量 PUT（status=1）：标签保留、发布时间不刷新
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", [
+        'category_id' => $cid, 'title' => '语义稿2', 'status' => 1,
+    ], $headers)->assertOk()->assertJsonPath('code', 0);
+    $a = Article::findOrFail($aid);
+    expect($a->tags)->toBe(['保留'])
+        ->and($a->published_at->equalTo($before))->toBeTrue();
+
+    // 显式提交 tags = 覆盖；转草稿 → 发布时间清空
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", [
+        'category_id' => $cid, 'title' => '语义稿3', 'tags' => ['新标签'], 'status' => 0,
+    ], $headers)->assertOk();
+    $a = Article::findOrFail($aid);
+    expect($a->tags)->toBe(['新标签'])->and($a->published_at)->toBeNull();
+
+    // 草稿再发布 → 首次落发布时间
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", [
+        'category_id' => $cid, 'title' => '语义稿3', 'status' => 1,
+    ], $headers)->assertOk();
+    expect(Article::findOrFail($aid)->published_at)->not->toBeNull();
+});
+
+it('栏目树：深层链路线性返回，article_count 跨级累加且列表过滤含子栏目', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+
+    // 造 3 层树：根 → 子 → 孙，文章挂在孙栏目
+    $rootId = $this->postJson('/api/admin/addon/cms/categories', ['name' => '根'], $headers)->json('data.id');
+    $childId = $this->postJson('/api/admin/addon/cms/categories', ['parent_id' => $rootId, 'name' => '子'], $headers)->json('data.id');
+    $grandId = $this->postJson('/api/admin/addon/cms/categories', ['parent_id' => $childId, 'name' => '孙'], $headers)->json('data.id');
+    $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $grandId, 'title' => '孙栏目文章', 'status' => 1,
+    ], $headers)->assertOk();
+
+    $tree = $this->getJson('/api/admin/addon/cms/categories', $headers)->json('data');
+    $root = collect($tree)->firstWhere('name', '根');
+    expect($root['article_count'])->toBe(1)                     // 孙栏目文章跨级计入
+        ->and($root['children'][0]['children'][0]['name'])->toBe('孙');
+
+    // 列表按根栏目过滤含子栏目（与树计数语义一致）
+    $this->getJson('/api/admin/addon/cms/articles?category_id='.$rootId, $headers)
+        ->assertOk()->assertJsonPath('data.total', 1);
+
+    // 30 层链（评审 C1 回归：nest 必须线性，接口须正常返回）
+    $parentId = $grandId;
+    for ($i = 0; $i < 30; $i++) {
+        $parentId = $this->postJson('/api/admin/addon/cms/categories',
+            ['parent_id' => $parentId, 'name' => "L{$i}"], $headers)->json('data.id');
+    }
+    $deep = $this->getJson('/api/admin/addon/cms/categories', $headers);
+    $deep->assertOk()->assertJsonPath('code', 0);
+    expect(count($deep->json('data')))->toBe(2);   // 默认栏目 + 根
+});
+
+it('文章正文存储前净化：剥离事件属性/script/iframe/危险协议', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+    $cid = Category::first()->id;
+
+    $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $cid,
+        'title' => 'XSS 载荷',
+        'content' => '<p onclick="alert(1)">段落</p><script>alert(2)</script>'
+            .'<img src="/ok.png" onerror="alert(3)"><a href="javascript:alert(4)">链接</a>'
+            .'<iframe src="//evil.example"></iframe><style>body{}</style><em>保留</em>',
+        'status' => 0,
+    ], $headers)->assertOk();
+
+    $content = Article::where('title', 'XSS 载荷')->value('content');
+    expect($content)->not->toContain('onclick')
+        ->not->toContain('onerror')
+        ->not->toContain('<script')
+        ->not->toContain('iframe')
+        ->not->toContain('<style')
+        ->not->toContain('javascript:')
+        ->toContain('<em>保留</em>')
+        ->toContain('段落')
+        ->toContain('src="/ok.png"');
+});
+
+it('素材删除联动清空文章封面（attachment.deleted → CMS 监听）', function () {
+    Storage::fake('public');
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+
+    $up = $this->withToken($token)->post('/api/admin/attachments',
+        ['file' => UploadedFile::fake()->image('cover.png')])->json('data');
+    $aid = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => Category::first()->id,
+        'title' => '带封面文章', 'cover' => $up['path'], 'status' => 1,
+    ], $headers)->json('data.id');
+
+    $this->withToken($token)->deleteJson("/api/admin/attachments/{$up['id']}")->assertOk();
+
+    $a = Article::findOrFail($aid);
+    expect($a->cover)->toBe('')->and($a->cover_url)->toBe('');
 });
 
 // —— §9 验收流程 1–6 自动化 ——

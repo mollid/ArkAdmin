@@ -13,10 +13,18 @@ return [
     // 超管角色名：RbacSeeder 与插件安装共用（新增插件权限自动授予该角色，见 §5.3）
     'super_role' => 'super_admin',
 
-    // 素材库（§5.4 attachments）：extensions 按文件内容嗅探校验；max_size 单位 KB
+    // 素材库（§5.4 attachments）：mimes 为「内容嗅探 mime → 存储扩展名」白名单；
+    // 校验与扩展名均以 finfo 嗅探为准，不信任客户端 mime/文件名；max_size 单位 KB
     'attachment' => [
         'disk' => env('ARKADMIN_ATTACHMENT_DISK', 'public'),
-        'extensions' => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'],
+        'mimes' => [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/bmp' => 'bmp',
+            'image/x-ms-bmp' => 'bmp',
+        ],
         'max_size' => (int) env('ARKADMIN_ATTACHMENT_MAX_SIZE', 10240),
     ],
 ];

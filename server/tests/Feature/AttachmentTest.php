@@ -1,5 +1,6 @@
 <?php
 
+use App\Admin\Events\AttachmentDeleted;
 use App\Admin\Events\AttachmentSaved;
 use App\Admin\Models\Admin;
 use App\Admin\Models\Attachment;
@@ -88,7 +89,8 @@ it('列表分页/keyword/类型过滤；keyword 通配符按字面量', function
         ->assertOk()->assertJsonPath('data.total', 3);
 });
 
-it('删除：行与文件一起删', function () {
+it('删除：行与文件一起删且派发 attachment.deleted', function () {
+    Event::fake([AttachmentDeleted::class]);
     $token = admin_token();
     $row = $this->withToken($token)->post('/api/admin/attachments',
         ['file' => UploadedFile::fake()->image('del.png')])->json('data');
@@ -98,6 +100,32 @@ it('删除：行与文件一起删', function () {
 
     expect(Attachment::find($row['id']))->toBeNull();
     Storage::disk('public')->assertMissing($row['path']);
+    Event::assertDispatched(AttachmentDeleted::class,
+        fn (AttachmentDeleted $e) => $e->attachment->path === $row['path']);
+});
+
+it('不信任客户端文件名：图片内容配 .php 名按内容嗅探存储', function () {
+    $token = admin_token();
+
+    $r = $this->withToken($token)->post('/api/admin/attachments', [
+        'file' => UploadedFile::fake()->image('shell.php'),
+    ]);
+    $r->assertOk()->assertJsonPath('code', 0);
+
+    $path = $r->json('data.path');
+    // fake()->image 实际生成 JPEG 内容：扩展名必须来自内容嗅探（.jpg），与文件名无关
+    expect(str_ends_with($path, '.php'))->toBeFalse()
+        ->and(str_ends_with($path, '.jpg'))->toBeTrue();
+});
+
+it('反向：PHP 内容伪装 .png 名 → 内容嗅探拒绝', function () {
+    $token = admin_token();
+
+    $this->withToken($token)->post('/api/admin/attachments', [
+        'file' => UploadedFile::fake()->createWithContent('image.png', '<?php echo 1;'),
+    ])->assertStatus(422);
+
+    expect(Attachment::count())->toBe(0);
 });
 
 it('无 system.attachment.* 权限返回 403 信封', function () {

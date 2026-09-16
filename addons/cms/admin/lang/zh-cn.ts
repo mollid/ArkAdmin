@@ -28,6 +28,7 @@ export default {
     tagsPlaceholder: '输入后回车创建标签',
     publishedAt: '发布时间',
     clearCover: '清除',
+    deleteConfirm: '确认删除文章 {title}？',
     publishOnSave: '保存时若为已发布状态将自动记录发布时间',
   },
 }

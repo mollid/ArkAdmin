@@ -62,7 +62,10 @@ it('ark:crud 生成全套模块，追加块幂等落位，PHP 全部语法合法
         ->toContain("'addon.fx.item.destroy'");
 
     $lang = file_get_contents($dir.'/admin/lang/zh-cn.ts');
-    expect($lang)->toContain('item: {');
+    // 语言包键是不带插件前缀的内层键：带点的 "fx.item" 既是非法 JS 标识符，
+    // 加引号也会落在 zh-cn.fx["fx.item"] 错误命名空间层级（页面 t('fx.item.title') 解析不到）
+    expect($lang)->toContain("  item: {")
+        ->not->toContain('fx.item');
 
     // PUT 部分语义：update 规则一律 sometimes、无 required（M4 I1 教训）
     $update = file_get_contents($dir.'/src/Http/Requests/ItemUpdateRequest.php');

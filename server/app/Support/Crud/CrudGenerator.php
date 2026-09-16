@@ -156,6 +156,9 @@ class CrudGenerator
             '{{LANG_KEY}}' => $n['langKey'],
             '{{VIEW_FILE}}' => $n['viewFile'],
             '{{VIEW_DIR}}' => $n['viewDir'],
+            // 语言包键是 mergeAddonLangs 并入 zh-cn.<addon> 后的**内层键**（不带插件前缀）：
+            // 页面 t('cms.notice.title') 解析路径为 zh-cn → cms → notice → title
+            '{{LANG_KEY_INNER}}' => $n['viewDir'],
             '{{MENU_NAME}}' => $n['menuName'],
             '{{MENU_TITLE}}' => $n['menuTitle'],
             '{{FILLABLE}}' => rtrim($fillable, "\n"),
@@ -235,7 +238,9 @@ class CrudGenerator
 
     protected function langBlock(array $tokens): string
     {
-        return strtr("  {{LANG_KEY}}: {\n    title: '{{MENU_TITLE}}',\n  },", $tokens);
+        // 键必须是不带插件前缀的内层键：带点的 "cms.notice" 既是非法 JS 标识符，
+        // 加引号后也会落在 zh-cn.cms["cms.notice"] 错误命名空间层级
+        return strtr("  {{LANG_KEY_INNER}}: {\n    title: '{{MENU_TITLE}}',\n  },", $tokens);
     }
 
     protected function menusBlock(array $tokens): string

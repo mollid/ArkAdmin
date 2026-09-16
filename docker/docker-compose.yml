@@ -4,7 +4,7 @@ services:
   nginx:
     image: docker.1panel.live/library/nginx:1.27-alpine
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ..:/var/www:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -24,7 +24,7 @@ services:
   postgres:
     image: docker.1panel.live/library/postgres:16
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: arkadmin
       POSTGRES_PASSWORD: arkadmin_db

@@ -9,7 +9,7 @@
 - [ ] admin/dist 生产服务方案：nginx 增加 SPA 静态服务与 /api 同域反代（当前 nginx.conf 只服务 server/public，dev 形态）
 - [ ] 发布并收紧 `config/cors.php`（框架默认 api/* + 允许 * ，dev 经 vite proxy 同源风险小，上生产前必须白名单化）
 - [ ] Sanctum token 过期时间（当前 `expiration => null` 永不过期）
-- [ ] dev 端口收紧：5432/8080 绑 127.0.0.1；PHP location 补 `try_files $uri =404;`
+- [x] dev 端口收紧：5432/8080 绑 127.0.0.1；PHP location 补 `try_files $uri =404;`（M5 后随 dev 加固落地，2026-09-16）
 - [ ] 超管密码 123456 改环境注入
 
 ## 种子与骨架残留

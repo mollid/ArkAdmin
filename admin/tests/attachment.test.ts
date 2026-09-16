@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatFileSize, isImage } from '../src/app/utils/attachment'
+import { formatFileSize } from '../src/app/utils/attachment'
 
 describe('formatFileSize', () => {
   it.each([
@@ -14,16 +14,5 @@ describe('formatFileSize', () => {
     [5 * 1024 ** 4, '5120.0 GB'], // 超出单位表封顶 GB
   ])('%i -> %s', (bytes, expected) => {
     expect(formatFileSize(bytes)).toBe(expected)
-  })
-})
-
-describe('isImage', () => {
-  it.each([
-    ['image/png', true],
-    ['image/jpeg', true],
-    ['application/pdf', false],
-    ['', false],
-  ])('%s -> %s', (mime, expected) => {
-    expect(isImage(mime)).toBe(expected)
   })
 })

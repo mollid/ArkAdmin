@@ -9,6 +9,7 @@ use App\Admin\Models\Attachment;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class AttachmentService
 {
@@ -38,7 +39,13 @@ class AttachmentService
         // mime 以 finfo 内容嗅探为准（与控制器校验同一来源）；扩展名由 mime 白名单映射得出，
         // 绝不使用客户端文件名/客户端 mime（均可伪造）
         $mime = self::sniffedMime($file);
-        $ext = (string) (config("arkadmin.attachment.mimes.$mime") ?? 'bin');
+        $mimes = (array) config('arkadmin.attachment.mimes', []);
+        $ext = $mime === '' ? null : ($mimes[$mime] ?? null);
+        if (! is_string($ext) || $ext === '') {
+            // 白名单属于存储契约：控制器会先给 422，服务层也必须自保——本服务是插件可直调的
+            // 公开接口（如插件自建上传路由），放行会静默写入无法展示的垃圾文件
+            throw new InvalidArgumentException("素材库不接受的文件类型：{$mime}");
+        }
         // 随机文件名防覆盖/防路径穿越；原始文件名只入 name 列，不进磁盘路径
         $path = $file->storeAs('attachments/'.date('Ym'), Str::random(32).'.'.$ext, $disk);
 
@@ -48,17 +55,23 @@ class AttachmentService
             ? @getimagesize(Storage::disk($disk)->path($path))
             : false;
 
-        $attachment = Attachment::create([
-            'name' => mb_substr($file->getClientOriginalName(), 0, 191),
-            'path' => $path,
-            'disk' => $disk,
-            'mime' => $mime,   // 内容嗅探 mime（客户端 mime 不入库）
-            'size' => (int) $file->getSize(),
-            'width' => $info === false ? null : (int) $info[0],
-            'height' => $info === false ? null : (int) $info[1],
-            'uploader_type' => 'admin',
-            'uploader_id' => $admin?->id,
-        ]);
+        try {
+            $attachment = Attachment::create([
+                'name' => mb_substr($file->getClientOriginalName(), 0, 191),
+                'path' => $path,
+                'disk' => $disk,
+                'mime' => $mime,   // 内容嗅探 mime（客户端 mime 不入库）
+                'size' => (int) $file->getSize(),
+                'width' => $info === false ? null : (int) $info[0],
+                'height' => $info === false ? null : (int) $info[1],
+                'uploader_type' => 'admin',
+                'uploader_id' => $admin?->id,
+            ]);
+        } catch (\Throwable $e) {
+            // 写盘与建行不在同一事务里：建行失败必须回收文件，否则留孤儿文件
+            Storage::disk($disk)->delete($path);
+            throw $e;
+        }
 
         // §5.5 埋点：素材已保存（框架公开接口）
         event(new AttachmentSaved($attachment));

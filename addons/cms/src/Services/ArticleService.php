@@ -57,7 +57,9 @@ class ArticleService
     protected function normalizeForUpdate(Article $article, array $data): array
     {
         if (array_key_exists('tags', $data)) {
-            $data['tags'] = array_values($data['tags']);
+            // 显式 tags=null 被 nullable 规则放行，语义按清空处理（与新建路径一致）；
+            // 注意不能直接 array_values($data['tags'])——null 会抛 TypeError 变 500
+            $data['tags'] = array_values((array) ($data['tags'] ?? []));
         }
         if (array_key_exists('content', $data)) {
             $data['content'] = RichTextSanitizer::clean((string) $data['content']);

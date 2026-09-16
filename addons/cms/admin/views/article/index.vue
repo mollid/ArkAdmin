@@ -206,7 +206,7 @@ async function save() {
 
 async function remove(row: ArticleRow) {
   try {
-    await ElMessageBox.confirm(t('cms.article.deleteConfirm', { title: row.title }), '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('cms.article.deleteConfirm', { title: row.title }), t('common.tip'), { type: 'warning' })
   } catch {
     return // 用户取消确认
   }

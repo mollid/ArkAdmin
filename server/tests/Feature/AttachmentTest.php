@@ -7,6 +7,7 @@ use App\Admin\Models\Attachment;
 use App\Admin\Models\Menu;
 use App\Admin\Seeds\MenuSeeder;
 use App\Admin\Seeds\RbacSeeder;
+use App\Admin\Services\AttachmentService;
 use App\Admin\Services\MenuService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -155,4 +156,33 @@ it('RbacSeeder 种出 attachment 权限且超管拥有；MenuSeeder 种出素材
     // 无权限账号看不到素材库菜单
     $u = Admin::create(['username' => 'noperm', 'password' => 'x123456', 'status' => 1]);
     expect(menu_tree_names((new MenuService)->treeFor($u)))->not->toContain('attachment');
+});
+
+// —— 评审轮 R2-9 回归：服务层自保（插件直调）与失败回收 ——
+
+it('服务层自保：白名单外文件直调 store 抛异常，不落库不留文件', function () {
+    // 服务是插件可直调的公开接口，不能只靠控制器校验；此前会静默写成 .bin
+    expect(fn () => app(AttachmentService::class)
+        ->store(UploadedFile::fake()->createWithContent('payload.bin', '<?php echo 1;')))
+        ->toThrow(InvalidArgumentException::class);
+
+    expect(Attachment::count())->toBe(0)
+        ->and(Storage::disk('public')->allFiles())->toBe([]);
+});
+
+it('建行失败时回收已写盘文件（写盘与建行不同事务，不留孤儿文件）', function () {
+    Attachment::creating(function () {
+        throw new RuntimeException('模拟建行失败');
+    });
+
+    try {
+        expect(fn () => app(AttachmentService::class)->store(UploadedFile::fake()->image('orphan.png')))
+            ->toThrow(RuntimeException::class);
+    } finally {
+        // 静态监听在模型上注册，用完即清，避免影响同进程后续用例
+        Attachment::flushEventListeners();
+    }
+
+    expect(Attachment::count())->toBe(0)
+        ->and(Storage::disk('public')->allFiles())->toBe([]);
 });

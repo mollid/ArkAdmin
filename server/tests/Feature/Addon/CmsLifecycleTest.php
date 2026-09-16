@@ -99,6 +99,28 @@ it('栏目：校验缺失名称 422，父级设为自己/子孙返回 code 1', f
         ->and(Category::find($id)->is_show)->toBeFalse();
 });
 
+it('栏目：parent_id 必须存在（store/update 同规则），显式 null 视为顶级', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+
+    // 评审 R2-3 回归：不存在的父级此前被接受，造出树里不可见、界面上无法管理的孤儿栏目
+    $this->postJson('/api/admin/addon/cms/categories',
+        ['name' => '幽灵栏目', 'parent_id' => 99999], $headers)->assertStatus(422);
+
+    // 显式 null（nullable 规则放行）必须按顶级处理，不得因 parent_id NOT NULL 变 500
+    $id = $this->postJson('/api/admin/addon/cms/categories',
+        ['name' => '空父级栏目', 'parent_id' => null], $headers)->assertOk()->assertJsonPath('code', 0)->json('data.id');
+    expect(Category::findOrFail($id)->parent_id)->toBe(0);
+
+    $this->putJson("/api/admin/addon/cms/categories/{$id}",
+        ['name' => '空父级栏目', 'parent_id' => 99999], $headers)->assertStatus(422);
+    expect(Category::findOrFail($id)->parent_id)->toBe(0);
+
+    // 默认栏目 + 空父级栏目：树中可见（无孤儿行）
+    expect(Category::count())->toBe(2)
+        ->and(count($this->getJson('/api/admin/addon/cms/categories', $headers)->json('data')))->toBe(2);
+});
+
 it('栏目：有文章/有子栏目时拒绝删除', function () {
     $token = install_cms();
     $headers = ['Authorization' => "Bearer {$token}"];
@@ -273,6 +295,77 @@ it('文章 PUT 部分语义：不传 tags 不清空；编辑已发布文章不�
     expect(Article::findOrFail($aid)->published_at)->not->toBeNull();
 });
 
+it('文章：显式 tags=null（nullable 放行）按清空处理，store 与 update 都不 500', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+    $cid = Category::first()->id;
+
+    $aid = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $cid, 'title' => '空标签稿', 'tags' => ['a', 'b'], 'status' => 0,
+    ], $headers)->assertOk()->json('data.id');
+
+    // 评审 R2-2 回归：array_values(null) 曾在此处 500
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", [
+        'category_id' => $cid, 'title' => '空标签稿', 'tags' => null, 'status' => 0,
+    ], $headers)->assertOk()->assertJsonPath('code', 0);
+    expect(Article::findOrFail($aid)->tags)->toBe([]);
+
+    $aid2 = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $cid, 'title' => '新建空标签稿', 'tags' => null, 'status' => 0,
+    ], $headers)->assertOk()->json('data.id');
+    expect(Article::findOrFail($aid2)->tags)->toBe([]);
+});
+
+it('文章：PUT 部分语义对齐——不传 status 不再 422，状态与发布时间不变', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+    $cid = Category::first()->id;
+    $aid = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => $cid, 'title' => '部分更新稿', 'status' => 1,
+    ], $headers)->json('data.id');
+    $before = Article::findOrFail($aid)->published_at;
+
+    // 评审 R2-4 回归：此前 status 为 required，部分 PUT 必 422（与 normalizeForUpdate 的部分语义矛盾）
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", ['title' => '部分更新稿2'], $headers)
+        ->assertOk()->assertJsonPath('code', 0);
+
+    $a = Article::findOrFail($aid);
+    expect($a->title)->toBe('部分更新稿2')
+        ->and($a->status)->toBe(1)
+        ->and($a->published_at->equalTo($before))->toBeTrue();
+
+    // 显式 status=null 无意义，仍按非法值拒绝
+    $this->putJson("/api/admin/addon/cms/articles/{$aid}", ['status' => null], $headers)->assertStatus(422);
+});
+
+it('文章：正文超长（策略上限）422', function () {
+    $token = install_cms();
+    $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => Category::first()->id,
+        'title' => '超长正文',
+        'content' => str_repeat('x', Article::CONTENT_MAX + 1),
+        'status' => 0,
+    ], ['Authorization' => "Bearer {$token}"])->assertStatus(422);
+});
+
+it('正文插图读取期按当前素材盘重写域名：换环境后历史正文不失效，外链不动', function () {
+    install_cms();
+    $prefix = Storage::disk('public')->url('');
+
+    $a = Article::create([
+        'category_id' => Category::first()->id,
+        'title' => '换域名稿',
+        'content' => '<p><img src="https://old-host.example/storage/attachments/202609/x.jpg"></p>'
+            .'<img src="https://cdn.example.com/ext.jpg">',
+        'status' => 0,
+    ]);
+
+    $content = Article::findOrFail($a->id)->content;
+    expect($content)->toContain($prefix.'attachments/202609/x.jpg')
+        ->not->toContain('old-host.example')
+        ->toContain('https://cdn.example.com/ext.jpg');
+});
+
 it('栏目树：深层链路线性返回，article_count 跨级累加且列表过滤含子栏目', function () {
     $token = install_cms();
     $headers = ['Authorization' => "Bearer {$token}"];
@@ -329,6 +422,28 @@ it('文章正文存储前净化：剥离事件属性/script/iframe/危险协议'
         ->toContain('<em>保留</em>')
         ->toContain('段落')
         ->toContain('src="/ok.png"');
+});
+
+it('正文净化保留 Quill 2 合法结构：列表类型与代码块保存后可原样读回', function () {
+    $token = install_cms();
+    $headers = ['Authorization' => "Bearer {$token}"];
+    $content = '<ol><li data-list="bullet">甲</li><li data-list="bullet">乙</li></ol>'
+        .'<ol><li data-list="checked">待办</li></ol>'
+        .'<div class="ql-code-block-container"><div class="ql-code-block">echo 1;</div></div>'
+        .'<p class="ql-align-center">居中</p>';
+
+    $aid = $this->postJson('/api/admin/addon/cms/articles', [
+        'category_id' => Category::first()->id,
+        'title' => '结构化正文',
+        'content' => $content,
+        'status' => 0,
+    ], $headers)->assertOk()->json('data.id');
+
+    expect(Article::findOrFail($aid)->content)
+        ->toContain('<ul><li data-list="bullet">甲</li><li data-list="bullet">乙</li></ul>')
+        ->toContain('<ul><li data-list="checked">待办</li></ul>')
+        ->toContain('<div class="ql-code-block-container"><div class="ql-code-block">echo 1;</div></div>')
+        ->toContain('<p class="ql-align-center">居中</p>');
 });
 
 it('素材删除联动清空文章封面（attachment.deleted → CMS 监听）', function () {

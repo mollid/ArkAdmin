@@ -6,7 +6,3 @@ export function formatFileSize(bytes: number): string {
   const v = bytes / 1024 ** i
   return `${i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`
 }
-
-export function isImage(mime: string): boolean {
-  return mime.startsWith('image/')
-}

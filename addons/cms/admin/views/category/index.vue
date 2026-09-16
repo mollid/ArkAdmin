@@ -73,13 +73,18 @@ const dialog = reactive({
   form: { id: 0, parent_id: 0, name: '', description: '', sort: 0, is_show: true },
 })
 
-/** 顶级 + 全树（排除自己及子孙的任务由后端守卫兜底） */
+/** 顶级 + 全树（排除自己及子孙、父级必须存在，均由后端守卫兜底） */
 const parentOptions = computed<CategoryNode[]>(() => [
-  { id: 0, parent_id: 0, name: '顶级', description: '', sort: 0, is_show: true, article_count: 0, children: rows.value },
+  { id: 0, parent_id: 0, name: t('cms.category.topLevel'), description: '', sort: 0, is_show: true,
+    article_count: 0, children: rows.value },
 ])
 
 async function load() {
-  rows.value = await categoryApi.list()
+  try {
+    rows.value = await categoryApi.list()
+  } catch {
+    // 拦截器已提示；保持现有数据，避免 unhandled rejection
+  }
 }
 
 function openDialog(row?: CategoryNode) {
@@ -112,7 +117,7 @@ async function save() {
 
 async function remove(row: CategoryNode) {
   try {
-    await ElMessageBox.confirm(t('cms.category.deleteConfirm', { name: row.name }), '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('cms.category.deleteConfirm', { name: row.name }), t('common.tip'), { type: 'warning' })
   } catch {
     return // 用户取消确认
   }

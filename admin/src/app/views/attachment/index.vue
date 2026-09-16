@@ -2,7 +2,7 @@
   <el-card>
     <template #header>
       <div class="header">
-        <span>素材库</span>
+        <span>{{ t('common.attachmentLibrary') }}</span>
         <div class="actions">
           <el-input v-model="keyword" clearable :placeholder="t('common.search')" style="width: 200px"
             @keyup.enter="load(1)" @clear="load(1)" />
@@ -71,13 +71,19 @@ async function doUpload(options: UploadRequestOptions) {
 }
 
 async function copy(row: AttachmentRow) {
-  await navigator.clipboard.writeText(row.url)
+  try {
+    await navigator.clipboard.writeText(row.url)
+  } catch {
+    // 非安全上下文（如 http 域名）下 clipboard 会拒绝，给出可操作的提示
+    ElMessage.error(t('common.copyFailed'))
+    return
+  }
   ElMessage.success(t('common.copied'))
 }
 
 async function remove(row: AttachmentRow) {
   try {
-    await ElMessageBox.confirm(`确认删除素材 ${row.name}？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('common.deleteConfirm', { name: row.name }), t('common.tip'), { type: 'warning' })
   } catch {
     return // 用户取消确认
   }

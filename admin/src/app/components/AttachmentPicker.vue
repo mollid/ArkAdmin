@@ -58,9 +58,13 @@ const picked = reactive(new Map<number, AttachmentRow>())
 
 async function load(p?: number) {
   if (p) page.value = p
-  const data = await attachmentApi.list({ page: page.value, keyword: keyword.value, type: 'image' })
-  rows.value = data.list
-  total.value = data.total
+  try {
+    const data = await attachmentApi.list({ page: page.value, keyword: keyword.value, type: 'image' })
+    rows.value = data.list
+    total.value = data.total
+  } catch {
+    // 拦截器已提示；打开对话框/翻页失败不应抛 unhandled rejection
+  }
 }
 
 function onVisibleChange(v: boolean) {

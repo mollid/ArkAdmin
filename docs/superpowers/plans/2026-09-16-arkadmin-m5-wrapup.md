@@ -8,14 +8,7 @@
 
 1. **自动化**：`CrudEndToEndTest` 全流程——fixture 插件 + 真实建表 → `ark:crud` → `addon:install` → 菜单树出现 `fx.item`、权限 `addon.fx.item.*` 入库 → HTTP CRUD 全通（store/list+keyword/show/update 部分语义/max 校验 422/destroy）→ 卸载干净。
 2. **开发库实测**：对 cms 插件真实生成 `cms_notices` 模块（`ark:crud --table=cms_notices`，`--addon` 按前缀自动推断）——11 个文件落位、菜单「公告管理」经 `refreshMenusAndPermissions` 即刻入库、前端产物自愈同步。首次运行暴露并修复了「menus 标记缺失时留下半生成状态」缺陷（前置校验提前到任何写入之前，附回归用例）。
-   **事后处置**：按计划「演示产物不进库」，生成的 Notice 模块已从仓库回退（该表无迁移，入库会让新环境安装出引用不存在表的模块）。cms 的 menus 通用标记对保留（未来生成的前置设施）。**待执行的开发库清理**（审批超时未跑，脚本已备好）：
-   ```bash
-   D="docker compose -f docker/docker-compose.yml exec -T -u 1000:1000 php sh -c"
-   $D "cd /var/www/server && php artisan tinker --execute=\"require '_m5_cleanup.php';\""
-   rm server/_m5_cleanup.php
-   rm -rf admin/src/addons/cms/views/notice admin/src/addons/cms/api/notice.ts
-   ```
-   脚本内容：删 `cms.notice` 菜单行、清 `addon.cms.notice.*` 权限（含 spatie 关联表）、drop `cms_notices` 表、冲权限缓存。
+   **事后处置**：按计划「演示产物不进库」，生成的 Notice 模块已从仓库回退（该表无迁移，入库会让新环境安装出引用不存在表的模块）。cms 的 menus 通用标记对保留（未来生成的前置设施）。开发库清理已执行（删 `cms.notice` 菜单行、清 `addon.cms.notice.*` 权限含 spatie 关联表、drop `cms_notices` 表、冲权限缓存），复核：cms 菜单恢复 3 行、权限 8 条、演示表不存在。用户走查时的「组件缺失」页即该残留的预期表现（M3 兜底机制正常工作）。
 
 ## 自动化测试
 

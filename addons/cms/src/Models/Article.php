@@ -4,6 +4,7 @@ namespace Addons\cms\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class Article extends Model
 {
@@ -24,5 +25,15 @@ class Article extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class, 'category_id');
+    }
+
+    protected $appends = ['cover_url'];
+
+    /** 封面展示地址：cover 存 attachments.path，url 推导与框架 Attachment::url 同规则 */
+    public function getCoverUrlAttribute(): string
+    {
+        return $this->cover !== ''
+            ? Storage::disk((string) config('arkadmin.attachment.disk', 'public'))->url($this->cover)
+            : '';
     }
 }

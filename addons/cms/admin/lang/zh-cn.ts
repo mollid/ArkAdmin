@@ -1,0 +1,33 @@
+/* 插件语言包：整体并入框架 i18n 的 zh-cn.cms 命名空间（§7.3，勿占用 app/login/common） */
+export default {
+  category: {
+    title: '栏目管理',
+    parent: '上级栏目',
+    name: '栏目名称',
+    nameRequired: '请输入栏目名称',
+    description: '描述',
+    sort: '排序',
+    show: '显示',
+    articleCount: '文章数',
+    deleteConfirm: '确认删除栏目 {name}？',
+  },
+  article: {
+    title: '文章管理',
+    keyword: '标题关键词',
+    category: '栏目',
+    allCategories: '全部栏目',
+    status: '状态',
+    draft: '草稿',
+    published: '已发布',
+    titleField: '文章标题',
+    titleRequired: '请输入文章标题',
+    summary: '摘要',
+    content: '正文',
+    cover: '封面',
+    tags: '标签',
+    tagsPlaceholder: '输入后回车创建标签',
+    publishedAt: '发布时间',
+    clearCover: '清除',
+    publishOnSave: '保存时若为已发布状态将自动记录发布时间',
+  },
+}

@@ -446,6 +446,37 @@ it('正文净化保留 Quill 2 合法结构：列表类型与代码块保存后�
         ->toContain('<p class="ql-align-center">居中</p>');
 });
 
+it('净化器保留 Quill 2 合法结构：data-list 归一 / 代码块容器 / 对齐类名', function () {
+    install_cms();   // 注册 Addons\ 自动加载器
+
+    $quill = '<ol><li data-list="bullet" class="ql-indent-1">无序甲</li></ol>'
+        .'<ol><li data-list="ordered">有序乙</li><li data-list="bullet">混合容器不归一</li></ol>'
+        .'<div class="ql-code-block-container" spellcheck="false"><div class="ql-code-block" data-language="php">echo 1;</div></div>'
+        .'<p class="ql-align-center">居中</p><h2>标题</h2>';
+
+    $clean = \Addons\cms\Support\RichTextSanitizer::clean($quill);
+
+    // 列表：data-list 必须保留，否则 Quill 2 重新解析时 li[data-list=bullet] 在 OL 容器里退化为有序列表
+    // （jsdom 注入 Quill 2.0.3 UMD 实测）
+    expect($clean)->toContain('data-list="bullet"')
+        ->toContain('data-list="ordered"')
+        ->toContain('ql-indent-1')
+        // 纯非有序列表容器归一为 UL；同容器混用有序/无序时保持 OL（改写会丢语义）
+        ->toContain('<ul><li data-list="bullet" class="ql-indent-1">')
+        ->toContain('<ol><li data-list="ordered">有序乙</li><li data-list="bullet">')
+        // 代码块：保留 div.ql-code-block* 结构（Quill 按 class 识别，实测可不依赖 data-language）
+        ->toContain('ql-code-block')
+        ->toContain('ql-align-center')
+        ->toContain('<h2>标题</h2>')
+        // 记录边界：data-language 不入白名单；Quill 2 识别后自行回填 data-language="plain"，
+        // CMS 工具栏无语言选择器故无损失。若将来引入语言支持，此处断言需随之改为保留。
+        ->not->toContain('data-language="php"');
+
+    // 非法值仍须被剔除
+    expect(\Addons\cms\Support\RichTextSanitizer::clean('<li data-list="evil">x</li>'))
+        ->not->toContain('data-list="evil"');
+});
+
 it('素材删除联动清空文章封面（attachment.deleted → CMS 监听）', function () {
     Storage::fake('public');
     $token = install_cms();

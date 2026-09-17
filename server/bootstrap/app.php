@@ -11,6 +11,7 @@ use App\Support\Addon\Console\AddonInstallCommand;
 use App\Support\Addon\Console\AddonListCommand;
 use App\Support\Addon\Console\AddonUpgradeCommand;
 use App\Support\Addon\Console\AddonUninstallCommand;
+use App\Support\Addon\Console\ArkSyncCommand;
 use App\Support\Crud\Console\ArkCrudCommand;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -38,6 +39,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         AddonCacheCommand::class,
         AddonClearCommand::class,
         AddonUpgradeCommand::class,
+        ArkSyncCommand::class,
         ArkCrudCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

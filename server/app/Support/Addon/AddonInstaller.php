@@ -18,7 +18,11 @@ use Spatie\Permission\PermissionRegistrar;
  */
 class AddonInstaller
 {
-    public function __construct(protected AddonManager $manager) {}
+    public function __construct(
+        protected AddonManager $manager,
+        protected AddonDependency $dependencies,
+        protected FrameworkCache $frameworkCache,
+    ) {}
 
     /** 安装：校验 → 迁移 → 注册（启用态）→ 菜单 → 权限 → install 钩子 */
     public function install(string $name): Addon
@@ -32,11 +36,7 @@ class AddonInstaller
                 "插件 [{$name}] 要求框架版本 >= {$info->supportVersion}，当前为 ".config('arkadmin.version')
             );
         }
-        foreach ($info->dependencies as $dep) {
-            if (Addon::find($dep) === null) {
-                throw new AddonException("依赖插件 [{$dep}] 未安装");
-            }
-        }
+        $this->dependencies->assertInstallable($info);
 
         Artisan::call('migrate', ['--path' => $info->migrationPath(), '--realpath' => true, '--force' => true]);
         // 迁移在事务外：失败自愈（重试时 migrate 幂等空转）；其后任一步失败，
@@ -74,6 +74,11 @@ class AddonInstaller
             throw new AddonException("插件 [{$name}] 处于启用状态，请先执行 addon:disable");
         }
         $info = $this->mustExistOnDisk($name);
+        // 反向依赖保护（enabledOnly=false：禁用态依赖方也挡，卸载顺序=先卸依赖方）
+        $deps = $this->dependencies->dependents($name, false);
+        if ($deps !== []) {
+            throw new AddonException('插件 ['.$name.'] 正被已安装插件 ['.implode('、', $deps).'] 依赖，请先卸载它们');
+        }
         if (! $keepData) {
             // migrate:reset 而非 rollback：rollback 只作用于最后一批迁移（getLast()），
             // 后装的其它插件/框架迁移会把本插件挤出最后一批，导致回滚静默空转
@@ -87,7 +92,7 @@ class AddonInstaller
         $record->delete();
         $this->purgeFrontend($name);
         $this->manager->flushCompiled();
-        $this->refreshFrameworkCaches();
+        $this->frameworkCache->rebuild();
     }
 
     public function enable(string $name): void
@@ -100,12 +105,13 @@ class AddonInstaller
             throw new AddonException("插件 [{$name}] 已是启用状态");
         }
         $info = $this->mustExistOnDisk($name);
-        foreach ($info->dependencies as $dep) {
-            $depRecord = Addon::find($dep);
-            if ($depRecord === null || ! $depRecord->enabled) {
-                throw new AddonException("依赖插件 [{$dep}] 未安装或未启用，无法启用 [{$name}]");
-            }
+        // 框架升/降级后启用态插件复核 support_version（此前只在 install 校验一次）
+        if (! $info->isSupported((string) config('arkadmin.version'))) {
+            throw new AddonException(
+                "插件 [{$name}] 要求框架版本 >= {$info->supportVersion}，当前为 ".config('arkadmin.version')
+            );
         }
+        $this->dependencies->assertEnableable($info);
         $record->update(['enabled' => true]);
         $this->hook($info, 'enable');
         $this->finish($info);
@@ -123,11 +129,16 @@ class AddonInstaller
             throw new AddonException("插件 [{$name}] 已是禁用状态");
         }
         $info = $this->mustExistOnDisk($name);
+        // 反向依赖保护：只看已启用的依赖方（禁用态依赖方不阻塞禁用）
+        $deps = $this->dependencies->dependents($name);
+        if ($deps !== []) {
+            throw new AddonException('插件 ['.$name.'] 正被已启用插件 ['.implode('、', $deps).'] 依赖，请先禁用它们');
+        }
         $record->update(['enabled' => false]);
         $this->hook($info, 'disable');
         $this->detachListeners($info);
         $this->manager->flushCompiled();
-        $this->refreshFrameworkCaches();
+        $this->frameworkCache->rebuild();
     }
 
     /** 最近一次前端同步的目标路径；null 表示无前端或同步失败（命令据此决定是否提示构建） */
@@ -409,37 +420,14 @@ class AddonInstaller
         }
     }
 
-    /** 安装/启用收尾：冲编译缓存、按需重建框架缓存、请求进程内即时注册 provider */
+    /** 安装/启用收尾：冲编译缓存、按需重建框架缓存（FrameworkCache）、请求进程内即时注册 provider */
     protected function finish(AddonInfo $info): void
     {
         $this->manager->flushCompiled();
-        $this->refreshFrameworkCaches();
+        $this->frameworkCache->rebuild();
         if (app()->isBooted() && class_exists($info->providerClass())) {
             app()->register($info->providerClass());
             $this->manager->markLoaded($info->providerClass());
-        }
-    }
-
-    /** §11 风险对策：config/route/event 缓存在用时自动重建，保证装/停/卸即时可见。
-     *  重建失败只降级为告警——状态变更已落库，不能让缓存目录不可写把操作打成失败 */
-    protected function refreshFrameworkCaches(): void
-    {
-        $rebuild = function (string $command): void {
-            try {
-                Artisan::call($command);
-            } catch (\Throwable $e) {
-                logger()->warning("框架缓存重建失败（{$command}）：".$e->getMessage());
-            }
-        };
-        $cachePath = base_path('bootstrap/cache');
-        if (is_file($cachePath.'/config.php')) {
-            $rebuild('config:cache');
-        }
-        if (is_file($cachePath.'/events.php')) {
-            $rebuild('event:cache');
-        }
-        if (glob($cachePath.'/routes-*.php')) {
-            $rebuild('route:cache');
         }
     }
 }

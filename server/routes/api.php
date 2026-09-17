@@ -5,6 +5,8 @@ use App\Admin\Http\Controllers\AttachmentController;
 use App\Admin\Http\Controllers\AuthController;
 use App\Admin\Http\Controllers\MenuController;
 use App\Admin\Http\Controllers\RoleController;
+use App\Admin\Http\Controllers\SettingController;
+use App\Admin\Http\Controllers\WidgetController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
@@ -34,5 +36,10 @@ Route::prefix('admin')->group(function () {
         Route::get('attachments', [AttachmentController::class, 'index'])->middleware('permission:system.attachment.index');
         Route::post('attachments', [AttachmentController::class, 'store'])->middleware('permission:system.attachment.store');
         Route::delete('attachments/{attachment}', [AttachmentController::class, 'destroy'])->middleware('permission:system.attachment.destroy');
+
+        // M6 harness：settings 基建（管理页在 settings 系统插件）与 widget 清单
+        Route::get('settings', [SettingController::class, 'index'])->middleware('permission:system.setting.index');
+        Route::put('settings', [SettingController::class, 'update'])->middleware('permission:system.setting.update');
+        Route::get('widgets', [WidgetController::class, 'index']);
     });
 });

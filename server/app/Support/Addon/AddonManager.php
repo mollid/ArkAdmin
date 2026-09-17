@@ -4,6 +4,7 @@ namespace App\Support\Addon;
 
 use App\Support\Addon\Models\Addon;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\QueryException;
 
 /**
  * 插件引导与发现（§6.4）：只读组件——扫描磁盘、读注册表、编译缓存、注册 provider。
@@ -16,9 +17,7 @@ class AddonManager
     /** @var array<class-string, true> 本次进程已注册的 provider，保证 boot 幂等 */
     protected array $loaded = [];
 
-    public function __construct(protected Application $app)
-    {
-    }
+    public function __construct(protected Application $app) {}
 
     public function addonPath(): string
     {
@@ -44,6 +43,7 @@ class AddonManager
                 $info = AddonInfo::fromDir(dirname($file));
             } catch (AddonException $e) {
                 logger()->warning('跳过无效插件：'.$e->getMessage());
+
                 continue;
             }
             $infos[$info->name] = $info;
@@ -60,7 +60,7 @@ class AddonManager
         try {
             // 库未迁移（如 migrate/bootstrap 阶段）时 addons 表可能不存在，降级为空清单
             $records = Addon::query()->where('enabled', true)->get();
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             logger()->warning('addons 注册表不可读，插件引导跳过：'.$e->getMessage());
         }
 
@@ -87,6 +87,7 @@ class AddonManager
             }
             if (! class_exists($class)) {
                 logger()->warning("插件 [{$info->name}] 缺少 {$class}，跳过加载");
+
                 continue;
             }
             try {
@@ -161,6 +162,69 @@ class AddonManager
             ];
         }
         file_put_contents($this->compiledFile(), "<?php\n\nreturn ".var_export($map, true).";\n");
+    }
+
+    /**
+     * settings schema 声明收集（harness 规格 §3.2）：扫 enabled 插件的 database/settings.php，
+     * 每条 = ['key','label','type','default'?,'scope'?]；归属 = 声明插件（scope=system 时所有权为 system）。
+     * 键冲突后者覆盖并告警。声明随插件装卸自然生灭，运行时扫描（量级小，暂不入编译缓存）。
+     */
+    public function settingSchemas(): array
+    {
+        $out = [];
+        foreach ($this->enabledInfos() as $info) {
+            $file = $info->dir.'/database/settings.php';
+            if (! is_file($file)) {
+                continue;
+            }
+            foreach ((array) require $file as $entry) {
+                if (! is_array($entry) || empty($entry['key']) || ! isset($entry['type'], $entry['label'])) {
+                    logger()->warning("插件 [{$info->name}] settings.php 存在非法声明，已跳过");
+
+                    continue;
+                }
+                if (isset($out[$entry['key']])) {
+                    logger()->warning("设置键 [{$entry['key']}] 重复声明（{$info->name}），后者覆盖");
+                }
+                $entry['addon'] = $info->name;
+                $entry['scope'] = ($entry['scope'] ?? 'plugin') === 'system' ? 'system' : 'plugin';
+                $out[$entry['key']] = $entry;
+            }
+        }
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * Widget 声明收集（harness 规格 §3.1）：扫 enabled 插件的 database/widgets.php，
+     * 每条 = ['key','component','title','permission'?,'sort'?]；key 全局唯一（约定 <addon>.<name>）。
+     * 组件文件寻址：/src/addons/<addon>/views/widgets/<component>.vue（前端解析）。
+     */
+    public function widgets(): array
+    {
+        $out = [];
+        foreach ($this->enabledInfos() as $info) {
+            $file = $info->dir.'/database/widgets.php';
+            if (! is_file($file)) {
+                continue;
+            }
+            foreach ((array) require $file as $entry) {
+                if (! is_array($entry) || empty($entry['key']) || empty($entry['component']) || ! isset($entry['title'])) {
+                    logger()->warning("插件 [{$info->name}] widgets.php 存在非法声明，已跳过");
+
+                    continue;
+                }
+                if (isset($out[$entry['key']])) {
+                    logger()->warning("Widget 键 [{$entry['key']}] 重复声明（{$info->name}），后者覆盖");
+                }
+                $entry['addon'] = $info->name;
+                $out[$entry['key']] = $entry;
+            }
+        }
+        ksort($out);
+
+        return array_values($out);
     }
 
     public function flushCompiled(): void

@@ -22,6 +22,13 @@ class RbacSeeder
                 );
             }
         }
+        // settings 基建只有读/写两个动作（管理页在 settings 系统插件）
+        foreach (['index', 'update'] as $act) {
+            Permission::firstOrCreate(
+                ['name' => "system.setting.{$act}", 'guard_name' => 'admin'],
+                ['module' => 'system']
+            );
+        }
 
         $super = Role::firstOrCreate(
             ['name' => config('arkadmin.super_role', 'super_admin'), 'guard_name' => 'admin']

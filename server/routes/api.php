@@ -1,5 +1,6 @@
 <?php
 
+use App\Admin\Http\Controllers\AddonController;
 use App\Admin\Http\Controllers\AdminController;
 use App\Admin\Http\Controllers\AttachmentController;
 use App\Admin\Http\Controllers\AuthController;
@@ -41,5 +42,11 @@ Route::prefix('admin')->group(function () {
         Route::get('settings', [SettingController::class, 'index'])->middleware('permission:system.setting.index');
         Route::put('settings', [SettingController::class, 'update'])->middleware('permission:system.setting.update');
         Route::get('widgets', [WidgetController::class, 'index']);
+
+        // M7 插件管理（harness §4.1）；单数 addon/<key> 为插件动态路由，与此处复数不冲突
+        Route::get('addons', [AddonController::class, 'index'])->middleware('permission:system.addon.index');
+        Route::post('addons', [AddonController::class, 'store'])->middleware('permission:system.addon.store');
+        Route::put('addons/{addon}', [AddonController::class, 'update'])->middleware('permission:system.addon.update');
+        Route::delete('addons/{addon}', [AddonController::class, 'destroy'])->middleware('permission:system.addon.destroy');
     });
 });

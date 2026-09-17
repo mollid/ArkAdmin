@@ -13,7 +13,7 @@ class RbacSeeder
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        $matrix = ['admin', 'role', 'menu', 'attachment'];
+        $matrix = ['admin', 'role', 'menu', 'attachment', 'addon'];
         foreach ($matrix as $m) {
             foreach (['index', 'store', 'update', 'destroy'] as $act) {
                 Permission::firstOrCreate(

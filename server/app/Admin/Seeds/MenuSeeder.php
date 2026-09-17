@@ -38,6 +38,9 @@ class MenuSeeder
             ['name' => 'system.menu', 'title' => '菜单管理', 'icon' => 'Menu',
                 'route_path' => '/system/menu', 'view_path' => 'system/menu/index',
                 'permission' => 'system.menu.index', 'sort' => 3],
+            ['name' => 'system.addon', 'title' => '插件管理', 'icon' => 'Grid',
+                'route_path' => '/system/addon', 'view_path' => 'system/addon/index',
+                'permission' => 'system.addon.index', 'sort' => 4],
         ] as $item) {
             $upsert($item + ['parent_id' => $sysId, 'icon' => $item['icon'],
                 'is_show' => true, 'addon_key' => '', 'permission' => $item['permission']]);

@@ -27,6 +27,7 @@
 - 前端测试：`cd admin && npm test`（Vitest，路由映射等纯函数单测）
 - 超管账号：admin / 123456（开发环境种子数据）
 - 首次部署/换机：执行一次 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan storage:link"`（素材库图片经 `APP_URL/storage/...` 访问，nginx 直读该软链；dev `APP_URL=http://localhost:8080`）
+- **升级/新增框架权限后**：跑一次 `php artisan db:seed --force`（幂等）补齐框架权限并同步给超管角色，同时自动安装捆绑系统插件——漏跑会出现「接口能用但前端按钮消失」（超管有 Gate 旁路，前端 `v-permission` 按 `/auth/me` 权限串判断，拿不到串即移除按钮），刷新浏览器后生效
 - 插件 CLI（前缀同上 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan ..."`）：`addon:list` / `addon:install {name}` / `addon:uninstall {name} [--keep-data]` / `addon:enable {name}` / `addon:disable {name}` / `addon:cache` / `addon:clear`
 - CRUD 生成器：`php artisan ark:crud --table=cms_xxx [--addon=cms] [--force]`——对既有表生成迁移外全套模块（Model/Service/Controller/Requests + 路由/菜单/权限/前端），表名须以插件前缀开头；目标插件 `database/menus.php` 根菜单 children 内需一次性植入 `// ark:crud:menus:start/end` 标记对；追加类内容以 per-table 标记对幂等替换，重复生成加 `--force`
 - 系统插件（M6 harness）：`settings`（设置管理页）/`op_logs`（操作日志），随 `db:seed` 幂等自动安装（`config('arkadmin.system_addons')`）；插件可声明 `database/widgets.php`（仪表盘卡片）与 `database/settings.php`（设置 schema）；日志清理 `php artisan op-logs:prune [--days=90]`；扩展点细节见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`

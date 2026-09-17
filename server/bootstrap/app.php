@@ -9,6 +9,7 @@ use App\Support\Addon\Console\AddonDisableCommand;
 use App\Support\Addon\Console\AddonEnableCommand;
 use App\Support\Addon\Console\AddonInstallCommand;
 use App\Support\Addon\Console\AddonListCommand;
+use App\Support\Addon\Console\AddonUpgradeCommand;
 use App\Support\Addon\Console\AddonUninstallCommand;
 use App\Support\Crud\Console\ArkCrudCommand;
 use Illuminate\Auth\AuthenticationException;
@@ -36,6 +37,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         AddonDisableCommand::class,
         AddonCacheCommand::class,
         AddonClearCommand::class,
+        AddonUpgradeCommand::class,
         ArkCrudCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

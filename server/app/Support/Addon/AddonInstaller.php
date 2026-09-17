@@ -379,13 +379,13 @@ class AddonInstaller
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
-    protected function hook(AddonInfo $info, string $method): void
+    protected function hook(AddonInfo $info, string $method, array $args = []): void
     {
         $class = $info->addonClass();
         if (class_exists($class)) {
             $addon = app($class);
             if ($addon instanceof Lifecycle) {
-                $addon->{$method}();
+                $addon->{$method}(...$args);
             }
         }
     }
@@ -418,6 +418,42 @@ class AddonInstaller
                 }
             }
         }
+    }
+
+    /**
+     * 升级（harness §4.2）：磁盘版本 > 注册表版本（或 $force）时执行
+     * 迁移 → upgrade(旧版本) 钩子 → 菜单/权限补齐 → 前端同步 → 写回注册表。
+     * 各步幂等，任一步失败即抛、version 保持旧值、可安全重试。
+     */
+    public function upgrade(string $name, bool $force = false): ?AddonInfo
+    {
+        $record = Addon::find($name);
+        if ($record === null) {
+            throw new AddonException("插件 [{$name}] 未安装");
+        }
+        $info = $this->mustExistOnDisk($name);
+        if (! $force && version_compare($info->version, (string) $record->version, '<=')) {
+            return null;    // 已是最新；版本没 bump 但需补迁移时用 --force
+        }
+        if (! $info->isSupported((string) config('arkadmin.version'))) {
+            throw new AddonException(
+                "插件 [{$name}] 要求框架版本 >= {$info->supportVersion}，当前为 ".config('arkadmin.version')
+            );
+        }
+        $from = (string) $record->version;
+        Artisan::call('migrate', ['--path' => $info->migrationPath(), '--realpath' => true, '--force' => true]);
+        DB::transaction(function () use ($info, $from, $record) {
+            $permissions = $this->syncMenus($info);
+            $this->createPermissions($info, array_values(array_unique(array_merge(
+                $permissions, $this->declaredPermissions($info)
+            ))));
+            $this->hook($info, 'upgrade', [$from]);
+            $record->update(['version' => $info->version, 'title' => $info->title]);
+        });
+        $this->finish($info);
+        $this->syncFrontend($info);
+
+        return $info;
     }
 
     /** 安装/启用收尾：冲编译缓存、按需重建框架缓存（FrameworkCache）、请求进程内即时注册 provider */

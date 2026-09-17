@@ -13,6 +13,9 @@ return [
     // 超管角色名：RbacSeeder 与插件安装共用（新增插件权限自动授予该角色，见 §5.3）
     'super_role' => 'super_admin',
 
+    // 捆绑系统插件（M6 harness）：随 db:seed 幂等自动安装，与业务插件同机制装卸
+    'system_addons' => ['settings', 'op_logs'],
+
     // 素材库（§5.4 attachments）：mimes 为「内容嗅探 mime → 存储扩展名」白名单；
     // 校验与扩展名均以 finfo 嗅探为准，不信任客户端 mime/文件名；max_size 单位 KB
     'attachment' => [

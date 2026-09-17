@@ -1,0 +1,9 @@
+{
+  "name": "settings",
+  "title": "系统设置",
+  "description": "系统设置管理页：渲染各插件 schema 声明，存取走核心 settings 基建",
+  "version": "0.1.0",
+  "type": "app",
+  "support_version": "0.1.0",
+  "dependencies": []
+}

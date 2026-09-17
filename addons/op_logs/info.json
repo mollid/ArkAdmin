@@ -1,0 +1,9 @@
+{
+  "name": "op_logs",
+  "title": "操作日志",
+  "description": "监听框架埋点事件存储管理端操作日志，提供查询页与统计卡片",
+  "version": "0.1.0",
+  "type": "app",
+  "support_version": "0.1.0",
+  "dependencies": []
+}

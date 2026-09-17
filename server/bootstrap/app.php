@@ -1,5 +1,6 @@
 <?php
 
+use App\Admin\Http\Middleware\LogAdminOperation;
 use App\Admin\Models\Admin;
 use App\Providers\AddonBootServiceProvider;
 use App\Support\Addon\Console\AddonCacheCommand;
@@ -40,6 +41,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // API-only：未认证请求不做 web 登录跳转（默认 redirectGuestsTo(route('login')) 会因无该路由抛 500）
         $middleware->redirectGuestsTo(null);
+        // harness 规格 §3.3：写操作自动埋点（全局栈，事件消费在 op-logs 系统插件）
+        $middleware->append(LogAdminOperation::class);
         $middleware->alias([
             'permission' => PermissionMiddleware::class,
         ]);

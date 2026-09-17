@@ -3,6 +3,7 @@
 namespace App\Admin\Http\Controllers;
 
 use App\Admin\Events\AdminLoginSuccessed;
+use App\Admin\Events\AdminOperationLogged;
 use App\Admin\Models\Admin;
 use App\Admin\Services\MenuService;
 use App\Support\Http\Traits\ApiResponse;
@@ -27,10 +28,23 @@ class AuthController extends Controller
 
         $admin = Admin::where('username', $request->input('username'))->first();
         $passwordOk = Hash::check($request->input('password'), $admin?->password ?? self::DUMMY_HASH);
-        if (!$admin || !$passwordOk) {
+        if (! $admin || ! $passwordOk) {
+            // §5.5 埋点：登录失败（admin=null，attempted username；密码经遮蔽表脱敏）
+            event(new AdminOperationLogged(
+                null, 'POST', $request->path(), 200, 0.0,
+                ['username' => (string) $request->input('username'), 'password' => '***'],
+                $request->ip(),
+            ));
+
             return $this->fail(1, '用户名或密码错误');
         }
         if ($admin->status !== 1) {
+            event(new AdminOperationLogged(
+                null, 'POST', $request->path(), 200, 0.0,
+                ['username' => (string) $request->input('username'), 'password' => '***', 'reason' => 'disabled'],
+                $request->ip(),
+            ));
+
             return $this->fail(1, '账号已禁用');
         }
 
@@ -38,6 +52,11 @@ class AuthController extends Controller
 
         // §5.5 埋点：登录成功。插件可监听（框架公开接口，删除视为破坏性变更）
         event(new AdminLoginSuccessed($admin));
+        event(new AdminOperationLogged(
+            $admin, 'POST', $request->path(), 200, 0.0,
+            ['username' => $admin->username, 'password' => '***'],
+            $request->ip(),
+        ));
 
         return $this->success([
             'token' => $token,
@@ -49,6 +68,7 @@ class AuthController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user('admin');
+
         return $this->success([
             'admin' => ['id' => $admin->id, 'username' => $admin->username, 'name' => $admin->name],
             'roles' => $admin->getRoleNames(),
@@ -61,6 +81,7 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $request->user('admin')->currentAccessToken()->delete();
+
         return $this->success();
     }
 }

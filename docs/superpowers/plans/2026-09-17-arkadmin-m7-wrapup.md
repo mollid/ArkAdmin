@@ -45,3 +45,19 @@
 
 - 评审轮（M2–M7 惯例）：新视角 code review → 修复 → 记录追加至本文件「评审轮记录」
 - M8（正确性打磨）：全面审计边界用例、权限粒度、事务与并发——另起会话 grilling 后定范围
+
+## 评审轮记录（新视角 code review，用户逐项核实）
+
+**结论：1 Critical + 4 Important 全部接受并修复**（`e2c0a76`），后端 **197 passed / 871 assertions**（+4 条回归用例）、前端 `vue-tsc` + Vitest 30 passed。
+
+| 级别 | 问题 | 修复 |
+|---|---|---|
+| C1 | `finish()` 不看注册表 enabled 状态，**禁用态插件 upgrade 会把 provider 重新注册回进程**（HTTP 直达，禁用即失效的契约被静默打破） | `finish(info, registerProvider)`，upgrade 传 `$record->enabled`；回归用例断言禁用态升级后 `Event::getListeners` 仍为空 |
+| I1 | `upgrade()` 全程未做依赖校验，新版本清单可引入未安装依赖/环 | 版本比较通过后、migrate 前补 `assertInstallable`；用例：升级引入 ghost 依赖被拒且版本写回不发生 |
+| I2 | Controller 只捕 AddonException，迁移 SQL/插件钩子/provider boot 的原生异常以 500 破坏信封契约 | 三个写端点补 `catch (\Throwable)` → `report()` + code 1 信封；`finish()` 的 provider 注册仿 `AddonManager::boot` 包 try/catch 降级告警 |
+| I3 | 「已安装」双口径（注册表 vs 磁盘）：目录被删的依赖可装出「已启用但依赖不可加载」脏状态 | `assertInstallable/assertEnableable/missing_dependencies` 统一为「注册表存在 **且** 磁盘健在」；磁盘缺失插件的依赖声明无从核验，`dependents()` 已注明局限 |
+| I4 | 插件名无字符集边界校验，`../sibling` 可借 basename 一致性越过 addon_path | `mustExistOnDisk()` 入口加 `^[a-z][a-z0-9_]*$` |
+| M1/M2/M3/M6/M7 | 命令 `--all` 静默跳过磁盘缺失插件、name 与 --all 互斥未校验、批量失败即中止；列表 O(N²) 重复扫描 + N+1；disk_missing 行丢 system 标记；环检测无 visited 剪枝；前端 uninstall 返回类型撒谎 | 全部修复：显式提示跳过、互斥报错、批量收集失败统一 FAILURE；`dependents()` 支持 scan 复用 + 依赖一次反查；system 按 config 判定；visited 集合；类型改 `null` 并让 `buildNotice` 接受 null |
+| M4/M5/M8 顺延 | FrameworkSync 只捕 AddonException；install/upgrade 并发无互斥；FrameworkCache 无直测 | FrameworkSync **刻意**响亮失败（钩子异常是真实缺陷，加注释固化）；并发锁与 FrameworkCache 直测记入 M8（后者会污染测试环境 bootstrap/cache，需先建隔离方案） |
+
+测试经验补充：同一测试进程内 provider 按类名记账（`app()->register` 幂等复用旧实例），跨用例复用同一插件名的 listen 映射不会生效——监听类用例须换独立插件名。

@@ -11,7 +11,5 @@ class AdminLoginSuccessed
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public Admin $admin)
-    {
-    }
+    public function __construct(public Admin $admin) {}
 }

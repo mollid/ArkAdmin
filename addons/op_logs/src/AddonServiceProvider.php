@@ -3,13 +3,15 @@
 namespace Addons\op_logs;
 
 use Addons\op_logs\Console\PruneOpLogs;
+use Addons\op_logs\Listeners\StoreAdminOperation;
+use App\Admin\Events\AdminOperationLogged;
 use App\Support\Addon\AddonServiceProvider as BaseProvider;
 
 class AddonServiceProvider extends BaseProvider
 {
     protected array $listen = [
-        \App\Admin\Events\AdminOperationLogged::class => [
-            \Addons\op_logs\Listeners\StoreAdminOperation::class,
+        AdminOperationLogged::class => [
+            StoreAdminOperation::class,
         ],
     ];
 

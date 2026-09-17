@@ -17,7 +17,5 @@ class AttachmentDeleted
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public Attachment $attachment)
-    {
-    }
+    public function __construct(public Attachment $attachment) {}
 }

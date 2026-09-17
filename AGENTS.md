@@ -2,7 +2,7 @@
 
 ## 工作区定位
 
-本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 13 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架：docker 环境、登录/RBAC/菜单接口、前端 SPA 三大系统管理页面；M2 插件系统核心：引导、生命周期、CLI、菜单注入、编译缓存；M3 前端同步：插件前端复制/删除、组件缺失兜底、i18n 命名空间合并、Vitest；M4 框架级素材库 + 首个业务插件 CMS：栏目树/富文本文章/封面标签；M5 `ark:crud` 一键 CRUD 生成器：information_schema 内省 → Model/Service/Controller/Requests/路由/菜单/权限/前端全套产出），设计文档与两个只读参考仓库并存。
+本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 13 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架：docker 环境、登录/RBAC/菜单接口、前端 SPA 三大系统管理页面；M2 插件系统核心：引导、生命周期、CLI、菜单注入、编译缓存；M3 前端同步：插件前端复制/删除、组件缺失兜底、i18n 命名空间合并、Vitest；M4 框架级素材库 + 首个业务插件 CMS：栏目树/富文本文章/封面标签；M5 `ark:crud` 一键 CRUD 生成器；M6 插件 harness：Widget/Settings/操作日志埋点三扩展点 + settings/op_logs 两系统插件，终态规格见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`），设计文档与两个只读参考仓库并存。
 
 ```
 /home/gdmax/fastadmin/            # 工作区根（git 仓库根）
@@ -29,6 +29,7 @@
 - 首次部署/换机：执行一次 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan storage:link"`（素材库图片经 `APP_URL/storage/...` 访问，nginx 直读该软链；dev `APP_URL=http://localhost:8080`）
 - 插件 CLI（前缀同上 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan ..."`）：`addon:list` / `addon:install {name}` / `addon:uninstall {name} [--keep-data]` / `addon:enable {name}` / `addon:disable {name}` / `addon:cache` / `addon:clear`
 - CRUD 生成器：`php artisan ark:crud --table=cms_xxx [--addon=cms] [--force]`——对既有表生成迁移外全套模块（Model/Service/Controller/Requests + 路由/菜单/权限/前端），表名须以插件前缀开头；目标插件 `database/menus.php` 根菜单 children 内需一次性植入 `// ark:crud:menus:start/end` 标记对；追加类内容以 per-table 标记对幂等替换，重复生成加 `--force`
+- 系统插件（M6 harness）：`settings`（设置管理页）/`op_logs`（操作日志），随 `db:seed` 幂等自动安装（`config('arkadmin.system_addons')`）；插件可声明 `database/widgets.php`（仪表盘卡片）与 `database/settings.php`（设置 schema）；日志清理 `php artisan op-logs:prune [--days=90]`；扩展点细节见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`
 
 ## 参考仓库：fastadmin/
 

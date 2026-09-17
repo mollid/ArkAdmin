@@ -1,16 +1,21 @@
 <?php
 
+use Addons\op_logs\Console\PruneOpLogs;
 use App\Admin\Models\Menu;
 use App\Admin\Models\Setting;
+use App\Admin\Seeds\MenuSeeder;
+use App\Admin\Seeds\RbacSeeder;
 use App\Admin\Services\MenuService;
 use App\Support\Addon\AddonInstaller;
+use App\Support\Settings\SettingStore;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
-    (new App\Admin\Seeds\RbacSeeder)->run();
-    (new App\Admin\Seeds\MenuSeeder)->run();
+    (new RbacSeeder)->run();
+    (new MenuSeeder)->run();
     // 系统插件在仓库 addons/ 下，真实安装（不经 fixture）
     config(['arkadmin.addon_path' => base_path('addons')]);
 });
@@ -63,7 +68,7 @@ it('卸载回路：插件资产清除，核心 settings 基建不受影响，重
     $installer = app(AddonInstaller::class);
     $installer->install('settings');
     $installer->install('op_logs');
-    app(App\Support\Settings\SettingStore::class)->set('site.name', '保留我', 'system');
+    app(SettingStore::class)->set('site.name', '保留我', 'system');
 
     $installer->disable('settings');
     $installer->uninstall('settings');
@@ -89,7 +94,7 @@ it('op-logs:prune 清理超期日志', function () {
     app(AddonInstaller::class)->install('op_logs');
     // 运行时安装的 provider 赶不上 Artisan 启动时序，测试内显式注册命令
     // （CLI 全新进程里由 provider boot 的 commands() 正常注册）
-    app(Illuminate\Contracts\Console\Kernel::class)->registerCommand(new Addons\op_logs\Console\PruneOpLogs);
+    app(Kernel::class)->registerCommand(new PruneOpLogs);
     DB::table('admin_op_logs')->insert([
         'route' => 'old', 'method' => 'POST', 'params' => '[]', 'status_code' => 200,
         'duration_ms' => 0, 'ip' => '127.0.0.1', 'created_at' => now()->subDays(100),

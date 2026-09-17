@@ -46,6 +46,14 @@ class AddonInfo
                 "清单 name [{$json['name']}] 与目录名 [".basename($dir)."] 不一致：{$file}"
             );
         }
+        foreach (['version', 'support_version'] as $key) {
+            // version_compare 对 'v1.0'、'1.0'、'1.0 beta' 的比较结果不可靠（M2 评审遗留容忍项，M8 收口）
+            if (! preg_match('/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/', $json[$key])) {
+                throw new AddonException(
+                    "info.json 字段 {$key} 版本号格式无效 [{$json[$key]}]（须为 x.y.z[-prerelease]）：{$file}"
+                );
+            }
+        }
         if ($json['type'] !== 'app') {
             throw new AddonException("暂不支持的插件类型 [{$json['type']}]：{$file}");
         }

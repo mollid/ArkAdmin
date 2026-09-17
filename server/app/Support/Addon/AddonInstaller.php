@@ -5,7 +5,9 @@ namespace App\Support\Addon;
 use App\Admin\Models\Menu;
 use App\Support\Addon\Contracts\Lifecycle;
 use App\Support\Addon\Models\Addon;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
@@ -24,8 +26,34 @@ class AddonInstaller
         protected FrameworkCache $frameworkCache,
     ) {}
 
+    /**
+     * 生命周期互斥（M8）：同插件操作串行化——迁移/注册表写回/前端同步的竞态窗口全关。
+     * 锁走 CACHE_STORE（生产 database、测试 array 驱动均支持原子锁）；TTL 600s 兜底
+     * 防持锁进程崩溃后死锁，迁移再慢也不应超过它；抢不到 3s 内快速失败进信封。
+     */
+    protected function withLock(string $name, callable $operation): mixed
+    {
+        $lock = Cache::lock("arkadmin:addon:{$name}", 600);
+        try {
+            $lock->block(3);
+        } catch (LockTimeoutException) {
+            // 超时说明锁不在本进程手里，不能 release（会误删他人锁）
+            throw new AddonException("插件 [{$name}] 正在被另一操作处理，请稍后再试");
+        }
+        try {
+            return $operation();
+        } finally {
+            $lock->release();
+        }
+    }
+
     /** 安装：校验 → 迁移 → 注册（启用态）→ 菜单 → 权限 → install 钩子 */
     public function install(string $name): Addon
+    {
+        return $this->withLock($name, fn (): Addon => $this->doInstall($name));
+    }
+
+    protected function doInstall(string $name): Addon
     {
         $info = $this->mustExistOnDisk($name);
         if (Addon::find($name) !== null) {
@@ -66,6 +94,11 @@ class AddonInstaller
     /** 卸载：业务表回滚（--keep-data 可保留）→ uninstall 钩子 → 清菜单/权限/注册行 */
     public function uninstall(string $name, bool $keepData = false): void
     {
+        $this->withLock($name, fn () => $this->doUninstall($name, $keepData));
+    }
+
+    protected function doUninstall(string $name, bool $keepData = false): void
+    {
         $record = Addon::find($name);
         if ($record === null) {
             throw new AddonException("插件 [{$name}] 未安装");
@@ -97,6 +130,11 @@ class AddonInstaller
 
     public function enable(string $name): void
     {
+        $this->withLock($name, fn () => $this->doEnable($name));
+    }
+
+    protected function doEnable(string $name): void
+    {
         $record = Addon::find($name);
         if ($record === null) {
             throw new AddonException("插件 [{$name}] 未安装");
@@ -120,6 +158,11 @@ class AddonInstaller
     }
 
     public function disable(string $name): void
+    {
+        $this->withLock($name, fn () => $this->doDisable($name));
+    }
+
+    protected function doDisable(string $name): void
     {
         $record = Addon::find($name);
         if ($record === null) {
@@ -150,6 +193,11 @@ class AddonInstaller
      * 仅限已安装插件（未安装时菜单/权限由 install 流程负责）。
      */
     public function refreshMenusAndPermissions(string $name): void
+    {
+        $this->withLock($name, fn () => $this->doRefreshMenusAndPermissions($name));
+    }
+
+    protected function doRefreshMenusAndPermissions(string $name): void
     {
         $record = Addon::find($name);
         if ($record === null) {
@@ -431,6 +479,11 @@ class AddonInstaller
      * 各步幂等，任一步失败即抛、version 保持旧值、可安全重试。
      */
     public function upgrade(string $name, bool $force = false): ?AddonInfo
+    {
+        return $this->withLock($name, fn () => $this->doUpgrade($name, $force));
+    }
+
+    protected function doUpgrade(string $name, bool $force = false): ?AddonInfo
     {
         $record = Addon::find($name);
         if ($record === null) {

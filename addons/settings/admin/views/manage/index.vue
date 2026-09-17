@@ -9,7 +9,7 @@
       </div>
     </template>
 
-    <el-empty v-if="!groups.length" />
+    <el-empty v-if="loaded && !entries.length" />
     <el-form v-else :model="form" label-width="120px">
       <div v-for="(items, addon) in groups" :key="addon" class="group">
         <div class="group-title">{{ addon === 'system' ? t('settings.manage.groupSystem') : addon }}</div>
@@ -45,6 +45,7 @@ interface SettingEntry {
 
 const { t } = useI18n()
 const form = reactive<Record<string, unknown>>({})
+const loaded = ref(false)
 
 const groups = computed<Record<string, SettingEntry[]>>(() => {
   const out: Record<string, SettingEntry[]> = {}
@@ -58,6 +59,7 @@ const entries = ref<SettingEntry[]>([])
 
 async function load() {
   entries.value = await request.get<never, SettingEntry[]>('/settings')
+  loaded.value = true
   for (const entry of entries.value) {
     form[entry.key] = entry.value
   }

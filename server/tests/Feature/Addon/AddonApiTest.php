@@ -97,3 +97,45 @@ it('无 system.addon.* 权限返回 403 信封', function () {
     $this->getJson('/api/admin/addons', ['Authorization' => "Bearer {$t2}"])->assertOk()->assertJsonPath('code', 403);
     $this->postJson('/api/admin/addons', ['name' => 'demo'], ['Authorization' => "Bearer {$t2}"])->assertOk()->assertJsonPath('code', 403);
 });
+
+it('非 AddonException 异常（插件钩子抛错）仍以 code 1 信封返回', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    @mkdir(storage_path('framework/admin-test/src'), 0777, true);
+    $dir = make_addon_dir('boom');
+    make_fixture_installable($dir, 'boom');
+    file_put_contents($dir.'/src/Addon.php', <<<'PHP'
+<?php
+
+namespace Addons\boom;
+
+use App\Support\Addon\Contracts\Lifecycle;
+
+class Addon implements Lifecycle
+{
+    public function install(): void
+    {
+        throw new \RuntimeException('boom from hook');
+    }
+
+    public function uninstall(): void
+    {
+    }
+
+    public function enable(): void
+    {
+    }
+
+    public function disable(): void
+    {
+    }
+
+    public function upgrade(string $fromVersion): void
+    {
+    }
+}
+PHP);
+
+    $resp = $this->postJson('/api/admin/addons', ['name' => 'boom'], ['Authorization' => 'Bearer '.admin_token()]);
+    $resp->assertOk()->assertJsonPath('code', 1);
+    expect($resp->json('msg'))->toContain('插件安装失败');
+});

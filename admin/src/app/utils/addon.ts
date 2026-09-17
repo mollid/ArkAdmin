@@ -32,6 +32,6 @@ export function addonStatus(row: AddonRow): AddonStatus {
 }
 
 /** 写操作响应 → 顶部持久提示（插件前端同步后需重新构建才能生效于生产 dist） */
-export function buildNotice(resp: { needs_build?: boolean }): string {
+export function buildNotice(resp: { needs_build?: boolean } | null): string {
   return resp?.needs_build ? '插件前端已同步，请执行 cd admin && npm run build 重新构建后台' : ''
 }

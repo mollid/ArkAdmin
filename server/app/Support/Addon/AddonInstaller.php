@@ -275,6 +275,11 @@ class AddonInstaller
 
     protected function mustExistOnDisk(string $name): AddonInfo
     {
+        // 纵深防御：AddonInfo 校验的是清单 name 字段且只对比 basename，
+        // 不挡 "../sibling" 这类路径拼接——目录定位前先按插件名正则卡死
+        if (! preg_match('/^[a-z][a-z0-9_]*$/', $name)) {
+            throw new AddonException("非法插件名 [{$name}]");
+        }
         try {
             return AddonInfo::fromDir($this->manager->addonPath().'/'.$name);
         } catch (AddonException $e) {
@@ -440,6 +445,8 @@ class AddonInstaller
                 "插件 [{$name}] 要求框架版本 >= {$info->supportVersion}，当前为 ".config('arkadmin.version')
             );
         }
+        // 新版本清单可能引入新依赖甚至环：升级与安装/启用同卡口，不放过「已启用但依赖缺失」的脏状态
+        $this->dependencies->assertInstallable($info);
         $from = (string) $record->version;
         Artisan::call('migrate', ['--path' => $info->migrationPath(), '--realpath' => true, '--force' => true]);
         DB::transaction(function () use ($info, $from, $record) {
@@ -450,20 +457,26 @@ class AddonInstaller
             $this->hook($info, 'upgrade', [$from]);
             $record->update(['version' => $info->version, 'title' => $info->title]);
         });
-        $this->finish($info);
+        // 禁用态升级只落数据不动运行态：绝不能因升级把禁用插件的 provider 重新挂回进程
+        $this->finish($info, $record->enabled);
         $this->syncFrontend($info);
 
         return $info;
     }
 
-    /** 安装/启用收尾：冲编译缓存、按需重建框架缓存（FrameworkCache）、请求进程内即时注册 provider */
-    protected function finish(AddonInfo $info): void
+    /** 安装/启用收尾：冲编译缓存、按需重建框架缓存（FrameworkCache）、按 $registerProvider 即时注册 provider */
+    protected function finish(AddonInfo $info, bool $registerProvider = true): void
     {
         $this->manager->flushCompiled();
         $this->frameworkCache->rebuild();
-        if (app()->isBooted() && class_exists($info->providerClass())) {
-            app()->register($info->providerClass());
-            $this->manager->markLoaded($info->providerClass());
+        if ($registerProvider && app()->isBooted() && class_exists($info->providerClass())) {
+            try {
+                app()->register($info->providerClass());
+                $this->manager->markLoaded($info->providerClass());
+            } catch (\Throwable $e) {
+                // 与 AddonManager::boot 同策略：单个坏插件不拖垮整个后台，状态变更已落库
+                logger()->warning("插件 [{$info->name}] provider 注册失败：".$e->getMessage());
+            }
         }
     }
 }

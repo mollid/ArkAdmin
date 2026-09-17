@@ -206,3 +206,58 @@ it('addon:upgrade 同版本输出已是最新并零副作用', function () {
     expect(file_get_contents(upgrade_log()))->toBe('none');
 });
 
+
+it('升级：新版本清单引入未安装依赖被拒且版本写回不发生', function () {
+    make_upgradable_addon('0.1.0');
+    $installer = app(AddonInstaller::class);
+    $installer->install('upx');
+    upgrade_upx_fixture();
+    // 0.2.0 清单再引入 ghost 依赖（发布侧事故）
+    $file = storage_path('framework/addon-fixture/upx').'/info.json';
+    $info = json_decode((string) file_get_contents($file), true);
+    $info['dependencies'] = ['ghost'];
+    file_put_contents($file, json_encode($info, JSON_UNESCAPED_UNICODE));
+
+    try {
+        $installer->upgrade('upx');
+        $this->fail('应当拒绝');
+    } catch (AddonException $e) {
+        expect($e->getMessage())->toContain('ghost');
+    }
+    expect(Addon::find('upx')->version)->toBe('0.1.0');
+});
+
+it('升级：禁用态插件升级后监听不被重新挂回（运行态不动）——独立插件名版', function () {
+    // 同进程内 provider 按类名记账：早前用例已注册过 Addons\upx（空 listen），
+    // 本用例换独立插件名，避免 app()->register 幂等复用旧实例导致 listen 不生效
+    $name = 'upl';
+    $dir = make_addon_dir($name);
+    @mkdir($dir.'/database/migrations', 0777, true);
+    file_put_contents($dir.'/src/AddonServiceProvider.php', <<<'PHP'
+<?php
+
+namespace Addons\upl;
+
+use App\Support\Addon\AddonServiceProvider as BaseProvider;
+
+class AddonServiceProvider extends BaseProvider
+{
+    protected array $listen = [
+        \App\Admin\Events\AttachmentSaved::class => ['Addons\upl\FakeListener'],
+    ];
+}
+PHP);
+    $installer = app(AddonInstaller::class);
+    $installer->install($name);
+    $event = App\Admin\Events\AttachmentSaved::class;
+    expect(Event::getListeners($event))->not->toBeEmpty();
+
+    $installer->disable($name);
+    expect(Event::getListeners($event))->toBeEmpty();
+
+    // force 升级（无版本变化）：只动数据面，绝不把禁用插件的监听挂回进程
+    $installer->upgrade($name, force: true);
+    expect(Addon::find($name)->version)->toBe('0.1.0')
+        ->and(Addon::find($name)->enabled)->toBeFalse()
+        ->and(Event::getListeners($event))->toBeEmpty();
+});

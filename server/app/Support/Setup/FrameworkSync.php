@@ -32,6 +32,8 @@ class FrameworkSync
                 } catch (AddonException $e) {
                     $skipped[$name] = $e->getMessage();
                 }
+                // 刻意只捕 AddonException：系统插件钩子里抛出的其它异常是真实缺陷，
+                // 同步命令应当响亮失败而不是静默吞进 skipped（与「全幂等」不矛盾——修好后重跑即可）
             }
         }
 

@@ -111,3 +111,14 @@ it('无依赖者时行为不变（回归）', function () {
     expect(Addon::find('lonely'))->toBeNull()
         ->and(app(AddonDependency::class)->dependents('lonely'))->toBe([]);
 });
+
+it('自依赖被拒绝（自身尚未注册，先落在依赖未安装卡口）', function () {
+    make_addon_dir('selfy', ['dependencies' => ['selfy']]);
+    try {
+        app(AddonInstaller::class)->install('selfy');
+        $this->fail('应当拒绝');
+    } catch (AddonException $e) {
+        expect($e->getMessage())->toContain('selfy');
+    }
+    expect(Addon::find('selfy'))->toBeNull();
+});

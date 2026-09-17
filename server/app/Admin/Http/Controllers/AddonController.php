@@ -28,10 +28,15 @@ class AddonController extends Controller
     {
         $scan = $this->manager->scan();
         $records = Addon::all()->keyBy('name');
+        $systemAddons = (array) config('arkadmin.system_addons', []);
 
         $rows = [];
+        // 所有依赖项一次反查，避免逐行 N+1
+        $allDeps = collect($scan)->flatMap(fn (AddonInfo $info) => $info->dependencies)->unique()->values();
+        $installedDeps = Addon::whereIn('name', $allDeps)->pluck('name')->flip();
         foreach ($scan as $info) {
-            $rows[] = $this->row($info, $records->get($info->name));
+            $record = $records->get($info->name);
+            $rows[] = $this->row($info, $record, $scan, $installedDeps, $systemAddons);
         }
         // 注册表有、磁盘缺失（异常态）：只读展示，提示排查
         foreach ($records->reject(fn ($r, $name) => isset($scan[$name])) as $record) {
@@ -39,7 +44,8 @@ class AddonController extends Controller
                 'name' => $record->name, 'title' => $record->title, 'description' => '',
                 'version' => '', 'installed_version' => $record->version,
                 'installed' => true, 'enabled' => (bool) $record->enabled,
-                'upgradable' => false, 'system' => false,
+                'upgradable' => false,
+                'system' => in_array($record->name, $systemAddons, true),
                 'dependencies' => [], 'missing_dependencies' => [], 'dependents' => [],
                 'install_time' => $record->install_time?->toDateTimeString(),
                 'disk_missing' => true,
@@ -56,6 +62,11 @@ class AddonController extends Controller
             $this->installer->install((string) $request->input('name'));
         } catch (AddonException $e) {
             return $this->fail(1, $e->getMessage());
+        } catch (\Throwable $e) {
+            // 迁移 SQL / 插件钩子 / provider boot 等原生异常也要收进信封（恒 200 契约）
+            report($e);
+
+            return $this->fail(1, '插件安装失败：'.$e->getMessage());
         }
 
         return $this->success(
@@ -77,22 +88,22 @@ class AddonController extends Controller
         if ($action === 'disable' && in_array($addon, $systemAddons, true)) {
             return $this->fail(1, "系统插件 [{$addon}] 不能停用，请使用 CLI 操作");
         }
-        if ($action === 'upgrade') {
-            try {
-                $info = $this->installer->upgrade($addon, (bool) $request->boolean('force'));
-            } catch (AddonException $e) {
-                return $this->fail(1, $e->getMessage());
-            }
-
-            return $this->success([
-                'upgraded' => $info !== null,
-                'needs_build' => $this->installer->lastSyncedFrontend !== null,
-            ], $info === null ? '已是最新版本' : "已升级到 {$info->version}");
-        }
         try {
+            if ($action === 'upgrade') {
+                $info = $this->installer->upgrade($addon, (bool) $request->boolean('force'));
+
+                return $this->success([
+                    'upgraded' => $info !== null,
+                    'needs_build' => $this->installer->lastSyncedFrontend !== null,
+                ], $info === null ? '已是最新版本' : "已升级到 {$info->version}");
+            }
             $this->installer->{$action}($addon);
         } catch (AddonException $e) {
             return $this->fail(1, $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->fail(1, '插件操作失败：'.$e->getMessage());
         }
 
         return $this->success(null, $action === 'enable' ? '已启用' : '已禁用');
@@ -107,16 +118,25 @@ class AddonController extends Controller
             $this->installer->uninstall($addon, $request->boolean('keep_data'));
         } catch (AddonException $e) {
             return $this->fail(1, $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->fail(1, '插件卸载失败：'.$e->getMessage());
         }
 
         return $this->success(null, '卸载成功');
     }
 
-    protected function row(AddonInfo $info, ?Addon $record): array
-    {
+    protected function row(
+        AddonInfo $info,
+        ?Addon $record,
+        array $scan,
+        $installedDeps,
+        array $systemAddons,
+    ): array {
         $missing = array_values(array_filter(
             $info->dependencies,
-            fn ($dep) => Addon::find($dep) === null
+            fn ($dep) => ! $installedDeps->has($dep) || ! isset($scan[$dep])
         ));
 
         return [
@@ -129,10 +149,10 @@ class AddonController extends Controller
             'enabled' => (bool) $record?->enabled,
             'upgradable' => $record !== null
                 && version_compare($info->version, (string) $record->version, '>'),
-            'system' => in_array($info->name, (array) config('arkadmin.system_addons', []), true),
+            'system' => in_array($info->name, $systemAddons, true),
             'dependencies' => $info->dependencies,
             'missing_dependencies' => $missing,
-            'dependents' => $this->dependencies->dependents($info->name, false),
+            'dependents' => $this->dependencies->dependents($info->name, false, $scan),
             'install_time' => $record?->install_time?->toDateTimeString(),
         ];
     }

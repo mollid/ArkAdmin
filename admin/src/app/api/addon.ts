@@ -9,5 +9,5 @@ export const addonApi = {
   update: (name: string, action: AddonAction, force = false) =>
     request.put<never, { upgraded: boolean; needs_build: boolean }>(`/addons/${name}`, { action, force }),
   uninstall: (name: string, keepData = false) =>
-    request.delete<never, { needs_build?: boolean }>(`/addons/${name}`, { params: keepData ? { keep_data: 1 } : {} }),
+    request.delete<never, null>(`/addons/${name}`, { params: keepData ? { keep_data: 1 } : {} }),
 }

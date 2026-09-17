@@ -73,9 +73,9 @@ async function load() {
 }
 
 /** 统一执行写操作：成功后按 needs_build 挂顶部持久提示并刷新列表 */
-async function run(fn: () => Promise<{ needs_build?: boolean }>, okMsg = '') {
+async function run(fn: () => Promise<unknown>, okMsg = '') {
   try {
-    const resp = await fn()
+    const resp = await fn() as { needs_build?: boolean } | null
     notice.value = buildNotice(resp)
     if (okMsg) ElMessage.success(okMsg)
     await load()

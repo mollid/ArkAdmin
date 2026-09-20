@@ -106,14 +106,33 @@ class AddonManager
         $this->loaded[$providerClass] = true;
     }
 
-    /** @return list<AddonInfo> 编译缓存优先，缓存缺失时按注册表现算 */
+    /** @return list<AddonInfo> 编译缓存优先，缓存缺失/损坏时回退注册表现算 */
     protected function loadableInfos(): array
     {
         if (! $this->isCompiled()) {
             return array_values($this->enabledInfos());
         }
+        // 坏缓存自愈（AUDIT-B6a/B6b）：截断/语法错误的 require 抛 ParseError，0 字节/标量
+        // 形状非法——都按「无缓存」处理：清除后回退注册表现算。绝不放异常炸穿引导，
+        // 否则连修复命令 addon:clear 自己都起不来
+        $map = null;
+        try {
+            $map = require $this->compiledFile();
+        } catch (\Throwable $e) {
+            logger()->warning('插件编译缓存损坏，已回退注册表现算：'.$e->getMessage());
+        }
+        if (! is_array($map)) {
+            $this->flushCompiled();
+
+            return array_values($this->enabledInfos());
+        }
         $infos = [];
-        foreach (require $this->compiledFile() as $entry) {
+        foreach ($map as $entry) {
+            if (! is_array($entry) || ! isset($entry['dir'])) {
+                logger()->warning('编译缓存条目形状非法，已跳过');
+
+                continue;
+            }
             try {
                 $infos[] = AddonInfo::fromDir($entry['dir']);
             } catch (AddonException $e) {
@@ -147,7 +166,9 @@ class AddonManager
     }
 
     /** 编译已启用插件清单（§6.4 addon:cache），生产免每次启动查库。
-     *  监听映射不入缓存：监听注册由各插件 provider 在 boot 时完成，缓存里的映射无人消费只会变成说谎的元数据 */
+     *  监听映射不入缓存：监听注册由各插件 provider 在 boot 时完成，缓存里的映射无人消费只会变成说谎的元数据。
+     *  写出走 tmp+rename 原子替换（同 syncFrontend 规范，AUDIT-B5a）：杜绝半写/撕裂文件；
+     *  写失败抛 AddonException，由调用方如实上报（不谎报成功） */
     public function compile(): void
     {
         $this->registerAutoloader();
@@ -161,7 +182,18 @@ class AddonManager
                 'provider' => $info->providerClass(),
             ];
         }
-        file_put_contents($this->compiledFile(), "<?php\n\nreturn ".var_export($map, true).";\n");
+        $file = $this->compiledFile();
+        $tmp = $file.'.tmp-'.getmypid();
+        try {
+            if (@file_put_contents($tmp, "<?php\n\nreturn ".var_export($map, true).";\n") === false
+                || ! @rename($tmp, $file)) {
+                throw new AddonException("插件编译缓存写入失败：{$file}（请检查磁盘空间与 bootstrap/cache 权限）");
+            }
+        } finally {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
     }
 
     /**
@@ -227,8 +259,19 @@ class AddonManager
         return array_values($out);
     }
 
-    public function flushCompiled(): void
+    /** 清除编译缓存。@return bool 文件不存在视为成功；删除失败（目录只读等，AUDIT-B5b）返回 false 并告警，调用方据此如实上报 */
+    public function flushCompiled(): bool
     {
-        @unlink($this->compiledFile());
+        $file = $this->compiledFile();
+        if (! is_file($file)) {
+            return true;
+        }
+        if (! @unlink($file)) {
+            logger()->warning("插件编译缓存清除失败：{$file}");
+
+            return false;
+        }
+
+        return true;
     }
 }

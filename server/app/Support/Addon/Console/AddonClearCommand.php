@@ -13,7 +13,11 @@ class AddonClearCommand extends Command
 
     public function handle(AddonManager $manager): int
     {
-        $manager->flushCompiled();
+        if (! $manager->flushCompiled()) {
+            $this->error('插件缓存清除失败：'.$manager->compiledFile());
+
+            return self::FAILURE;
+        }
         $this->info('插件缓存已清除');
 
         return self::SUCCESS;

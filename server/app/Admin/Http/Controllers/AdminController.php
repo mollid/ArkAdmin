@@ -20,13 +20,25 @@ class AdminController extends Controller
     {
         $request->validate([
             'per_page' => 'nullable|integer|min:1|max:100',
+            'keyword' => 'nullable|string|max:191',
+            'status' => 'nullable|integer|in:0,1',
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
         ]);
         $q = Admin::query()
             ->with('roles')
+            ->when($request->filled('keyword'), fn ($q) => $q->where(function ($q) use ($request) {
+                $kw = PgLike::wrap((string) $request->input('keyword'));
+                $q->where('username', 'ilike', $kw)->orWhere('name', 'ilike', $kw);
+            }))
             ->when($request->filled('username'), fn ($q) => $q->where('username', 'ilike',
-                PgLike::wrap((string) $request->input('username'))))
+                PgLike::wrap((string) $request->input('username'))))   // 旧参数保留兼容
             ->when($request->filled('name'), fn ($q) => $q->where('name', 'ilike',
                 PgLike::wrap((string) $request->input('name'))))
+            // status=0 是合法筛选值，不能用 filled() 判（对 0 返回 false）
+            ->when(isset($request->all()['status']) && $request->input('status') !== '', fn ($q) => $q->where('status', (int) $request->input('status')))
+            ->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->input('date_from')))
+            ->when($request->filled('date_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->input('date_to')))
             ->orderByDesc('id');
 
         // 编辑回填契约：每行附 roles（角色 id 数组）——覆盖预载的 Role 模型集合，避免序列化出完整角色对象

@@ -11,7 +11,7 @@ class ArticleService
 {
     public function __construct(protected CategoryService $categories) {}
 
-    /** @param array{keyword?:string,category_id?:int,status?:int,per_page?:int} $filters */
+    /** @param array{keyword?:string,category_id?:int,status?:int,date_from?:string,date_to?:string,per_page?:int} $filters */
     public function paginate(array $filters): LengthAwarePaginator
     {
         $keyword = (string) ($filters['keyword'] ?? '');
@@ -23,6 +23,8 @@ class ArticleService
                 $q->whereIn('category_id', $this->categories->subtreeIds((int) $filters['category_id']));
             })
             ->when(isset($filters['status']) && $filters['status'] !== '', fn ($q) => $q->where('status', (int) $filters['status']))
+            ->when(! empty($filters['date_from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['date_from']))
+            ->when(! empty($filters['date_to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['date_to']))
             ->orderByDesc('id')
             ->paginate((int) ($filters['per_page'] ?? 15));
     }

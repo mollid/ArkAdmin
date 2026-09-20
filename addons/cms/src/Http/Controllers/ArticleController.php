@@ -24,11 +24,13 @@ class ArticleController extends Controller
             'keyword' => 'nullable|string|max:191',
             'category_id' => 'nullable|integer|min:0',
             'status' => 'nullable|integer|in:0,1',
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
         ]);
 
         // 列表不拖富文本（content 可能很大），编辑时经 show 取全量
         return $this->paginate(
-            $this->service->paginate($request->only(['keyword', 'category_id', 'status', 'per_page']))
+            $this->service->paginate($request->only(['keyword', 'category_id', 'status', 'per_page', 'date_from', 'date_to']))
                 ->through(fn (Article $a) => $a->makeHidden('content'))
         );
     }

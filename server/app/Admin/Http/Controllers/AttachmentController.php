@@ -23,12 +23,18 @@ class AttachmentController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
             'keyword' => 'nullable|string|max:191',
             'type' => 'nullable|string|in:image',
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'uploader_id' => 'nullable|integer|min:1',
         ]);
         $q = Attachment::query()
             // PG 的 LIKE 默认转义符是反斜杠；%/_/\ 按字面量匹配
             ->when($request->filled('keyword'), fn ($q) => $q->where('name', 'ilike',
                 PgLike::wrap((string) $request->input('keyword'))))
             ->when($request->input('type') === 'image', fn ($q) => $q->where('mime', 'like', 'image/%'))
+            ->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->input('date_from')))
+            ->when($request->filled('date_to'), fn ($q) => $q->whereDate('created_at', '<=', $request->input('date_to')))
+            ->when($request->filled('uploader_id'), fn ($q) => $q->where('uploader_id', (int) $request->input('uploader_id')))
             ->orderByDesc('id');
 
         return $this->paginate($q->paginate((int) $request->input('per_page', 15)));

@@ -227,6 +227,76 @@ it('升级：新版本清单引入未安装依赖被拒且版本写回不发生'
     expect(Addon::find('upx')->version)->toBe('0.1.0');
 });
 
+it('AUDIT-C2 --all 批量中单个插件抛原生异常不中止整批', function () {
+    // A：版本待升级且 upgrade 钩子抛原生异常（迁移坏 SQL 同传播链，RuntimeException 易注入）
+    $bad = make_addon_dir('bad', ['version' => '0.1.0']);
+    @mkdir($bad.'/database/migrations', 0777, true);
+    upx_migration($bad.'/database/migrations/2026_09_15_000001_create_bad_things_table.php', 'bad_things');
+    file_put_contents($bad.'/database/menus.php', "<?php\n\nreturn [];\n");
+    file_put_contents($bad.'/database/permissions.php', "<?php\n\nreturn [];\n");
+    make_fixture_installable($bad, 'bad');
+    file_put_contents($bad.'/src/Addon.php', <<<'PHP'
+<?php
+
+namespace Addons\bad;
+
+use App\Support\Addon\Contracts\Lifecycle;
+
+class Addon implements Lifecycle
+{
+    public function install(): void
+    {
+    }
+
+    public function uninstall(): void
+    {
+    }
+
+    public function enable(): void
+    {
+    }
+
+    public function disable(): void
+    {
+    }
+
+    public function upgrade(string $fromVersion): void
+    {
+        throw new \RuntimeException('bad-hook-boom');
+    }
+}
+PHP);
+
+    // B：正常待升级插件
+    make_upgradable_addon('0.1.0');
+
+    $installer = app(AddonInstaller::class);
+    $installer->install('bad');
+    $installer->install('upx');
+    // 先装后 bump：磁盘 0.2.0 > 注册表 0.1.0 才构成待升级
+    $info = json_decode((string) file_get_contents($bad.'/info.json'), true);
+    $info['version'] = '0.2.0';
+    file_put_contents($bad.'/info.json', json_encode($info, JSON_UNESCAPED_UNICODE));
+    upgrade_upx_fixture();
+
+    $this->artisan('addon:upgrade', ['--all' => true])
+        ->expectsOutputToContain('bad-hook-boom')
+        ->assertExitCode(1);
+
+    // A 的原生异常不拖累 B：B 正常升级写回
+    expect(Addon::find('upx')->version)->toBe('0.2.0');
+});
+
+it('AUDIT-C1 注册表缺失态下 addon:upgrade --all 降级告警不崩栈（对齐 addon:list）', function () {
+    Schema::dropIfExists('addons'); // PG 事务性 DDL，测试结束随事务回滚
+    make_upgradable_addon('0.1.0');
+
+    $this->artisan('addon:upgrade', ['--all' => true])
+        ->expectsOutputToContain('addons 注册表不可读')
+        ->expectsOutputToContain('没有需要升级的插件')
+        ->assertExitCode(0);
+});
+
 it('升级：禁用态插件升级后监听不被重新挂回（运行态不动）——独立插件名版', function () {
     // 同进程内 provider 按类名记账：早前用例已注册过 Addons\upx（空 listen），
     // 本用例换独立插件名，避免 app()->register 幂等复用旧实例导致 listen 不生效
@@ -260,4 +330,15 @@ PHP);
     expect(Addon::find($name)->version)->toBe('0.1.0')
         ->and(Addon::find($name)->enabled)->toBeFalse()
         ->and(Event::getListeners($event))->toBeEmpty();
+});
+
+it('AUDIT-C5c 单名 upgrade 指向磁盘缺失插件时报明确失败而非「跳过」', function () {
+    make_upgradable_addon('0.1.0');
+    app(AddonInstaller::class)->install('upx');
+    remove_dir(storage_path('framework/addon-fixture/upx'));
+
+    $this->artisan('addon:upgrade', ['name' => 'upx'])
+        ->doesntExpectOutputToContain('磁盘缺失，跳过')
+        ->expectsOutputToContain('不存在或清单无效')
+        ->assertExitCode(1);
 });

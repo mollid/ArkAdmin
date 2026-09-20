@@ -98,6 +98,33 @@ it('重复生成需 --force；--force 幂等且标记对不重复', function () 
     expect(substr_count($menus, "'name' => 'fx.item'"))->toBe(1);
 });
 
+it('AUDIT-D5 追加类文件缺失时生成合法骨架而非裸块', function () {
+    $dir = storage_path('framework/addon-fixture/fx');
+    // 文档合法形态：只有 menus.php（含通用标记对）是必配，permissions/routes/lang 均可缺省
+    @unlink($dir.'/database/permissions.php');
+    @unlink($dir.'/routes/admin.php');
+    @unlink($dir.'/admin/lang/zh-cn.ts');
+
+    $this->artisan('ark:crud', ['--table' => 'fx_items'])->assertExitCode(0);
+
+    // permissions.php：裸块（无 <?php/return）会被 install/upgrade 的「必须返回字符串数组」卡死
+    $perm = file_get_contents($dir.'/database/permissions.php');
+    expect($perm)->toContain('<?php')
+        ->toContain('return [')
+        ->toContain("'addon.fx.item.index'");
+    exec('php -l '.escapeshellarg($dir.'/database/permissions.php'), $out, $code);
+    expect($code)->toBe(0, "骨架语法错误：\n".implode("\n", $out));
+
+    $routes = file_get_contents($dir.'/routes/admin.php');
+    expect($routes)->toContain('<?php')
+        ->toContain('use Illuminate\Support\Facades\Route;')
+        ->toContain('permission:addon.fx.item.index');
+
+    $lang = file_get_contents($dir.'/admin/lang/zh-cn.ts');
+    expect($lang)->toContain('export default {')
+        ->toContain('  item: {');
+});
+
 it('表名必须以插件前缀开头', function () {
     $this->artisan('ark:crud', ['--table' => 'other_items', '--addon' => 'fx'])
         ->expectsOutputToContain('前缀')
@@ -121,4 +148,58 @@ it('menus.php 缺通用标记对时报错且不留下半生成状态', function 
     expect(is_file($dir.'/src/Models/Post.php'))->toBeFalse()
         ->and(is_file($dir.'/admin/api/post.ts'))->toBeFalse()
         ->and(is_file($dir.'/routes/admin.php'))->toBeTrue();
+});
+
+it('AUDIT-D5b snake 归一撞车时 --force 拒绝静默覆盖前表模块', function () {
+    Schema::dropIfExists('fx_article');
+    Schema::create('fx_article', function (Blueprint $t) {
+        $t->id();
+        $t->string('title');
+        $t->timestamps();
+    });
+    Schema::dropIfExists('fx_articles');
+    Schema::create('fx_articles', function (Blueprint $t) {
+        $t->id();
+        $t->string('title');
+        $t->timestamps();
+    });
+
+    $this->artisan('ark:crud', ['--table' => 'fx_article'])->assertExitCode(0);
+
+    // fx_articles 与 fx_article 归一为同一模型 Article：无 --force 被文件存在守卫挡，
+    // --force 必须被撞车检测挡（否则前表整套模块连同菜单/权限串被静默归并）
+    $this->artisan('ark:crud', ['--table' => 'fx_articles'])
+        ->expectsOutputToContain('--force')
+        ->assertExitCode(1);
+    $this->artisan('ark:crud', ['--table' => 'fx_articles', '--force' => true])
+        ->expectsOutputToContain('归一')
+        ->assertExitCode(1);
+    expect(file_get_contents(storage_path('framework/addon-fixture/fx').'/src/Models/Article.php'))
+        ->toContain("protected \$table = 'fx_article'");
+});
+
+it('AUDIT-D6a 写盘失败时明确报错而非谎报已生成', function () {
+    $dir = storage_path('framework/addon-fixture/fx');
+
+    // 目录无法创建：src/ 只读 → src/Models 建不出来（0555 须落在新建目录的直接父级）
+    chmod($dir.'/src', 0555);
+    try {
+        $this->artisan('ark:crud', ['--table' => 'fx_items'])
+            ->expectsOutputToContain('无法创建')
+            ->assertExitCode(1);
+    } finally {
+        chmod($dir.'/src', 0777);
+    }
+
+    // 文件写入失败：目标目录存在但只读 → 模型文件写不进去
+    @mkdir($dir.'/src/Models', 0777, true);
+    chmod($dir.'/src/Models', 0555);
+    try {
+        $this->artisan('ark:crud', ['--table' => 'fx_items'])
+            ->expectsOutputToContain('写入失败')
+            ->assertExitCode(1);
+    } finally {
+        chmod($dir.'/src/Models', 0777);
+    }
+    expect(is_file($dir.'/src/Models/Item.php'))->toBeFalse();
 });

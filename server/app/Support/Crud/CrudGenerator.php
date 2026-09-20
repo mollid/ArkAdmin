@@ -50,12 +50,27 @@ class CrudGenerator
                 }
             }
         }
+        // AUDIT-D5b：snake 归一撞车——cms_article 与 cms_articles 的派生模型同为 Article，
+        // --force 会把前表整套模块（含同名菜单/权限串）静默覆盖；现有模型声明的表名与本表不同即拦下
+        $modelFile = "{$dir}/src/Models/{$n['model']}.php";
+        if (is_file($modelFile)
+            && preg_match('/protected\s+\$table\s*=\s*\'([^\']+)\'/', (string) file_get_contents($modelFile), $m)
+            && $m[1] !== $table) {
+            throw new CrudException(
+                "表名 [{$table}] 与 [{$m[1]}] 归一为同一模型 [{$n['model']}]，继续生成会静默覆盖对方的模块文件，请改用可区分的表名"
+            );
+        }
 
         $tokens = $this->tokens($table, $addon, $n, $mapped, $searchColumn);
         $written = [];
+        // 写盘返回值逐一检查（AUDIT-D6a）：磁盘满/目录只读时明确报错，而非照常输出「已生成」
         $write = function (string $path, string $content) use (&$written) {
-            @mkdir(dirname($path), 0777, true);
-            file_put_contents($path, $content);
+            if (! is_dir(dirname($path)) && ! @mkdir(dirname($path), 0777, true)) {
+                throw new CrudException('目录无法创建：'.dirname($path).'（请检查磁盘与目录权限）');
+            }
+            if (@file_put_contents($path, $content) === false) {
+                throw new CrudException('文件写入失败：'.$path.'（请检查磁盘与目录权限）');
+            }
             $written[] = $path;
         };
 
@@ -67,17 +82,20 @@ class CrudGenerator
         $write("{$dir}/admin/api/{$n['viewFile']}.ts", $this->render('api_ts', $tokens));
         $write("{$dir}/admin/views/{$n['viewDir']}/index.vue", $this->render('view_vue', $tokens));
 
-        // 追加类文件：本表标记对存在则整块替换；否则按文件形态插入
+        // 追加类文件：本表标记对存在则整块替换；否则按文件形态插入；缺失则生成合法骨架
         $routesFile = "{$dir}/routes/admin.php";
-        $this->writeMarkerRegion($routesFile, $table, $this->routesBlock($tokens), appendAtEnd: true);
+        $this->writeMarkerRegion($routesFile, $table, $this->routesBlock($tokens),
+            "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\n{BLOCK}\n", appendAtEnd: true);
         $written[] = $routesFile;
 
         $permissionsFile = "{$dir}/database/permissions.php";
-        $this->writeMarkerRegion($permissionsFile, $table, $this->permissionsBlock($tokens), beforeLast: '];');
+        $this->writeMarkerRegion($permissionsFile, $table, $this->permissionsBlock($tokens),
+            "<?php\n\nreturn [\n{BLOCK}\n];\n", beforeLast: '];');
         $written[] = $permissionsFile;
 
         $langFile = "{$dir}/admin/lang/zh-cn.ts";
-        $this->writeMarkerRegion($langFile, $table, $this->langBlock($tokens), beforeLast: '}');
+        $this->writeMarkerRegion($langFile, $table, $this->langBlock($tokens),
+            "export default {\n{BLOCK}\n};\n", beforeLast: '}');
         $written[] = $langFile;
 
         $menusFile = "{$dir}/database/menus.php";
@@ -264,12 +282,20 @@ class CrudGenerator
 
     /**
      * 追加类文件的幂等写入：已有本表标记对 → 整块替换；无标记对 → 按文件形态插入
-     * （routes 追加文件尾；permissions/lang 插入最后一个收尾符前）。
+     * （routes 追加文件尾；permissions/lang 插入最后一个收尾符前）；
+     * 目标文件缺失 → 按 $skeleton（{BLOCK} 占位）生成合法骨架，绝不落裸块——
+     * permissions.php 对插件是合法可选文件，裸块会让后续 install/upgrade 被
+     * 「必须返回字符串数组」卡死且报错误导（AUDIT-D5）。
      */
-    protected function writeMarkerRegion(string $file, string $table, string $renderedBody, bool $appendAtEnd = false, ?string $beforeLast = null): void
+    protected function writeMarkerRegion(string $file, string $table, string $renderedBody, string $skeleton, bool $appendAtEnd = false, ?string $beforeLast = null): void
     {
-        $content = is_file($file) ? (string) file_get_contents($file) : '';
         $block = $this->markerBlock($table, $renderedBody);
+        if (! is_file($file)) {
+            file_put_contents($file, str_replace('{BLOCK}', $block, $skeleton));
+
+            return;
+        }
+        $content = (string) file_get_contents($file);
         $start = "// ark:crud:{$table}:start";
         $end = "// ark:crud:{$table}:end";
 

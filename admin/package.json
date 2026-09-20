@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@vueuse/core": "^15.0.0",
+    "@vueuse/router": "^15.0.0",
     "axios": "^1.20.0",
     "element-plus": "^2.14.5",
     "pinia": "^4.0.3",

@@ -72,12 +72,13 @@ async function load() {
   rows.value = await addonApi.list()
 }
 
-/** 统一执行写操作：成功后按 needs_build 挂顶部持久提示并刷新列表 */
-async function run(fn: () => Promise<unknown>, okMsg = '') {
+/** 统一执行写操作：成功后按 needs_build 挂顶部持久提示并刷新列表；okMsg 可按响应定制 */
+async function run(fn: () => Promise<unknown>, okMsg: string | ((resp: unknown) => string) = '') {
   try {
     const resp = await fn() as { needs_build?: boolean } | null
     notice.value = buildNotice(resp)
-    if (okMsg) ElMessage.success(okMsg)
+    const msg = typeof okMsg === 'function' ? okMsg(resp) : okMsg
+    if (msg) ElMessage.success(msg)
     await load()
   } catch {
     // 拦截器已提示
@@ -93,7 +94,11 @@ function toggle(row: AddonRow, action: AddonAction) {
 }
 
 function upgrade(row: AddonRow) {
-  return run(() => addonApi.update(row.name, 'upgrade'), '升级成功')
+  // 后端返回 upgraded=false（点击前已被另一端升级完）时不得谎报「升级成功」
+  return run(
+    () => addonApi.update(row.name, 'upgrade'),
+    (resp) => ((resp as { upgraded?: boolean } | null)?.upgraded === false ? '已是最新版本' : '升级成功'),
+  )
 }
 
 async function remove(row: AddonRow) {
@@ -107,7 +112,7 @@ async function confirmUninstall(row: AddonRow): Promise<boolean | null> {
   const deps = row.dependents.length > 0 ? `（正被 ${row.dependents.join('、')} 依赖）` : ''
   try {
     await ElMessageBox.confirm(
-      `卸载将回滚插件业务表${deps}，确定卸载「${row.title}」？`,
+      `卸载默认回滚插件业务表（也可选择保留数据）${deps}，确定卸载「${row.title}」？`,
       t('common.tip'),
       { type: 'warning', distinguishCancelAndClose: true,
         cancelButtonText: '保留数据', confirmButtonText: '全部回滚' },

@@ -36,6 +36,17 @@ class AddonInfo
                 throw new AddonException("info.json 缺少必填字段 {$key}：{$file}");
             }
         }
+        // 长度上限与 create_addons_table 列宽对齐（AUDIT-B1a）：超长值漏到 DB 层才炸
+        // 会以裸 SQLSTATE 告终，违反「无效清单不进入安装流程」的报错口径
+        foreach (['name' => 64, 'title' => 255, 'version' => 32, 'support_version' => 32] as $key => $max) {
+            if (mb_strlen($json[$key]) > $max) {
+                throw new AddonException("info.json 字段 {$key} 超长（上限 {$max} 字符）：{$file}");
+            }
+        }
+        // description 不落库（仅列表接口透传），上限防几 MB 文本撑大 HTTP 响应
+        if (mb_strlen((string) ($json['description'] ?? '')) > 1000) {
+            throw new AddonException('info.json 字段 description 超长（上限 1000 字符）：'.$file);
+        }
         if (! preg_match('/^[a-z][a-z0-9_]*$/', $json['name'])) {
             // \$ 必须转义：$ 后接全角字符的字节会被双引号串解析为变量
             throw new AddonException("插件名必须匹配 ^[a-z][a-z0-9_]*\$：{$json['name']}");

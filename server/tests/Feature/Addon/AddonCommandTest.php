@@ -70,3 +70,26 @@ it('命令走通的完整装/停/卸回路', function () {
     $this->artisan('addon:uninstall', ['name' => 'demo'])->assertExitCode(0);
     expect(Addon::find('demo'))->toBeNull();
 });
+
+it('AUDIT-C5a enable 重同步前端后提示构建命令（纯后端插件不提示）', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    // admin_path 有效（src/ 存在）是前端同步的前提
+    @mkdir(storage_path('framework/admin-test/src'), 0777, true);
+    $dir = make_addon_dir('feen');
+    @mkdir($dir.'/admin/views/x', 0777, true);
+    file_put_contents($dir.'/admin/views/x/index.vue', '<template><div/></template>');
+    $installer = app(AddonInstaller::class);
+    $installer->install('feen');
+    $installer->disable('feen');
+
+    $this->artisan('addon:enable', ['name' => 'feen'])
+        ->expectsOutputToContain('npm run build')
+        ->assertExitCode(0);
+
+    make_addon_dir('beonly2');
+    $installer->install('beonly2');
+    $installer->disable('beonly2');
+    $this->artisan('addon:enable', ['name' => 'beonly2'])
+        ->doesntExpectOutputToContain('npm run build')
+        ->assertExitCode(0);
+});

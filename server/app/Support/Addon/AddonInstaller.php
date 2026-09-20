@@ -221,6 +221,8 @@ class AddonInstaller
      * §6.6：addons/<key>/admin/ → admin/src/addons/<key>/。
      * 先拷贝到同分区临时目录再整体替换：拷贝阶段失败时既有产物原样保留（不出现半拷贝前端）；
      * 任何失败都记警告并返回 null，绝不谎报"已同步"。
+     * AUDIT-A5 注记：两次 rename 之间存在 SIGKILL 硬杀窗口（dest 短暂缺失或 .bak 残留），
+     * 窗口微秒级、恢复手段现成（enable/refresh 的 syncFrontend 幂等重建自愈），不再追求进程级原子。
      */
     protected function syncFrontend(AddonInfo $info): ?string
     {
@@ -303,7 +305,13 @@ class AddonInstaller
 
     protected function purgeFrontend(string $addonName): void
     {
-        $this->deleteDir($this->frontendDir($addonName));
+        $dir = $this->frontendDir($addonName);
+        $this->deleteDir($dir);
+        // AUDIT-A7：deleteDir 全程 @ 静默，清理失败必须补遥测——残留会被前端构建的
+        // import.meta.glob 编入产物，且此时卸载已完成、没有重试入口，运维只能手工 rm
+        if (is_dir($dir)) {
+            logger()->warning("插件 [{$addonName}] 前端产物删除失败，残留于 {$dir}，请手工清理");
+        }
     }
 
     protected function deleteDir(string $dir): void

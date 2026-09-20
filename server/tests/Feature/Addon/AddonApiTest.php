@@ -98,6 +98,32 @@ it('无 system.addon.* 权限返回 403 信封', function () {
     $this->postJson('/api/admin/addons', ['name' => 'demo'], ['Authorization' => "Bearer {$t2}"])->assertOk()->assertJsonPath('code', 403);
 });
 
+it('AUDIT-D1 列表页依赖方反查一次完成（不再逐行 N+1）', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    make_addon_dir('nplusa');
+    make_addon_dir('nplusb', ['dependencies' => ['nplusa']]);
+    make_addon_dir('nplusc', ['dependencies' => ['nplusa']]);
+    $installer = app(AddonInstaller::class);
+    $installer->install('nplusa');
+    $installer->install('nplusb');
+    $installer->install('nplusc');
+
+    $addonQueries = 0;
+    \Illuminate\Support\Facades\DB::listen(function ($query) use (&$addonQueries) {
+        if (str_contains($query->sql, 'from "addons"')) {
+            $addonQueries++;
+        }
+    });
+    $rows = $this->getJson('/api/admin/addons', ['Authorization' => 'Bearer '.admin_token()])
+        ->assertOk()->assertJsonPath('code', 0)->json('data');
+    // 本文件早前用例的 fixture 残留磁盘，scan 全量 glob——按前缀过滤只断言本用例目标
+    $nplus = collect($rows)->filter(fn ($r) => str_starts_with($r['name'], 'nplus'))->values();
+    expect($nplus)->toHaveCount(3)
+        ->and(collect($rows)->firstWhere('name', 'nplusa')['dependents'])->toBe(['nplusb', 'nplusc'])
+        // Addon::all() + 依赖存在性预取 + dependentsMap 反查 = 恒定 3 次，与行数无关
+        ->and($addonQueries)->toBeLessThanOrEqual(3);
+});
+
 it('非 AddonException 异常（插件钩子抛错）仍以 code 1 信封返回', function () {
     config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
     @mkdir(storage_path('framework/admin-test/src'), 0777, true);

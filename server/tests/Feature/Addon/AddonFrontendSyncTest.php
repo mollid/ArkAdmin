@@ -1,6 +1,7 @@
 <?php
 
 use App\Support\Addon\AddonInstaller;
+use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     (new App\Admin\Seeds\RbacSeeder)->run();
@@ -172,4 +173,24 @@ it('卸载命令提示重新构建（dist 里仍有该插件旧 chunk）', funct
     $this->artisan('addon:uninstall', ['name' => 'beonly'])
         ->doesntExpectOutputToContain('重新构建')
         ->assertExitCode(0);
+});
+
+it('AUDIT-A7 前端产物清理失败时记 warning（残留会被构建编入且无重试入口）', function () {
+    config(['arkadmin.addon_path' => storage_path('framework/addon-fixture')]);
+    make_frontend_addon('fe');
+    $installer = app(AddonInstaller::class);
+    $installer->install('fe');
+    $installer->disable('fe');
+
+    // 子目录只读：其内容无法删除，制造「清理半途失败」
+    $stubborn = $installer->frontendDir('fe').'/views';
+    chmod($stubborn, 0555);
+    Log::spy();
+    try {
+        $installer->uninstall('fe');
+        expect(is_dir($installer->frontendDir('fe')))->toBeTrue();
+        Log::shouldHaveReceived('warning', [\Mockery::on(fn ($msg) => str_contains((string) $msg, '删除失败'))]);
+    } finally {
+        chmod($stubborn, 0777);
+    }
 });

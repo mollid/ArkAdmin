@@ -65,3 +65,14 @@ it('dependencies 含非字符串或空项抛异常', function () {
 it('清单 name 与目录名不一致抛异常', function () {
     expect(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['name' => 'beta'])))->toThrow(AddonException::class);
 });
+
+it('AUDIT-B1a 清单字段超长被拒（与 create_addons_table 列宽对齐）', function () {
+    // name：65 个 a 能通过正则与目录一致检查，落在长度卡口
+    expect(fn () => AddonInfo::fromDir(make_addon_dir(str_repeat('a', 65))))->toThrow(AddonException::class)
+        ->and(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['title' => str_repeat('长', 256)])))->toThrow(AddonException::class)
+        ->and(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['version' => '1.0.0-'.str_repeat('a', 30)])))->toThrow(AddonException::class)
+        ->and(fn () => AddonInfo::fromDir(make_addon_dir('alpha', ['description' => str_repeat('描', 1001)])))->toThrow(AddonException::class);
+    // 边界值放行：version 恰 32 字符
+    expect(AddonInfo::fromDir(make_addon_dir('alpha', ['version' => '1.0.0-'.str_repeat('a', 26)]))->version)
+        ->toBe('1.0.0-'.str_repeat('a', 26));
+});

@@ -51,9 +51,42 @@ class AddonDependency
         foreach (Addon::query()
             ->when($enabledOnly, fn ($q) => $q->where('enabled', true))
             ->get() as $record) {
+            if ($record->name === $name) {
+                // AUDIT-B1b：事后篡改清单给已装插件加自依赖时，没有这行会把「先卸载依赖方」
+                // 指向自身形成死锁（install 有未安装卡口、enable/upgrade 有环检测，唯独卸载裸查）
+                continue;
+            }
             $info = $scan[$record->name] ?? null;
             if ($info !== null && in_array($name, $info->dependencies, true)) {
                 $out[] = $record->name;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * 列表页批量口径：一次查询注册表构建反向依赖映射（AUDIT-D1，避免逐行 dependents() 的 N+1）。
+     * 语义与逐键调 dependents($name, $enabledOnly, $scan) 完全一致：
+     * 值只含已安装（$enabledOnly 时须已启用）且磁盘清单声明依赖该键的插件名。
+     *
+     * @param  array<string, AddonInfo>  $scan
+     * @return array<string, list<string>>
+     */
+    public function dependentsMap(bool $enabledOnly, array $scan): array
+    {
+        $wanted = [];   // 依赖声明反向索引：依赖方 => 其声明的依赖集合（磁盘清单为准）
+        foreach ($scan as $info) {
+            foreach ($info->dependencies as $dep) {
+                $wanted[$info->name][$dep] = true;
+            }
+        }
+        $out = [];
+        foreach (Addon::query()
+            ->when($enabledOnly, fn ($q) => $q->where('enabled', true))
+            ->get() as $record) {
+            foreach ($wanted[$record->name] ?? [] as $dep => $_) {
+                $out[$dep][] = $record->name;
             }
         }
 

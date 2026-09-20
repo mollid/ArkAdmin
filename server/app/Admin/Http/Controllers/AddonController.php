@@ -31,12 +31,13 @@ class AddonController extends Controller
         $systemAddons = (array) config('arkadmin.system_addons', []);
 
         $rows = [];
-        // 所有依赖项一次反查，避免逐行 N+1
+        // 依赖项与依赖方各一次反查，避免逐行 N+1（AUDIT-D1）
         $allDeps = collect($scan)->flatMap(fn (AddonInfo $info) => $info->dependencies)->unique()->values();
         $installedDeps = Addon::whereIn('name', $allDeps)->pluck('name')->flip();
+        $dependentsMap = $this->dependencies->dependentsMap(false, $scan);
         foreach ($scan as $info) {
             $record = $records->get($info->name);
-            $rows[] = $this->row($info, $record, $scan, $installedDeps, $systemAddons);
+            $rows[] = $this->row($info, $record, $scan, $installedDeps, $systemAddons, $dependentsMap);
         }
         // 注册表有、磁盘缺失（异常态）：只读展示，提示排查
         foreach ($records->reject(fn ($r, $name) => isset($scan[$name])) as $record) {
@@ -133,6 +134,7 @@ class AddonController extends Controller
         array $scan,
         $installedDeps,
         array $systemAddons,
+        array $dependentsMap,
     ): array {
         $missing = array_values(array_filter(
             $info->dependencies,
@@ -152,7 +154,7 @@ class AddonController extends Controller
             'system' => in_array($info->name, $systemAddons, true),
             'dependencies' => $info->dependencies,
             'missing_dependencies' => $missing,
-            'dependents' => $this->dependencies->dependents($info->name, false, $scan),
+            'dependents' => $dependentsMap[$info->name] ?? [],
             'install_time' => $record?->install_time?->toDateTimeString(),
         ];
     }

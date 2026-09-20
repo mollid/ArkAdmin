@@ -122,3 +122,19 @@ it('自依赖被拒绝（自身尚未注册，先落在依赖未安装卡口）'
     }
     expect(Addon::find('selfy'))->toBeNull();
 });
+
+it('AUDIT-B1b 事后篡改清单加自依赖时不构成卸载死锁', function () {
+    make_addon_dir('selfdep');
+    $installer = app(AddonInstaller::class);
+    $installer->install('selfdep');
+    $installer->disable('selfdep');
+    // 发布后带外篡改：给已装插件补上自依赖（fromDir 不查 name ∈ dependencies）
+    $file = storage_path('framework/addon-fixture/selfdep').'/info.json';
+    $info = json_decode((string) file_get_contents($file), true);
+    $info['dependencies'] = ['selfdep'];
+    file_put_contents($file, json_encode($info));
+
+    expect(app(AddonDependency::class)->dependents('selfdep', false))->toBe([]);
+    $installer->uninstall('selfdep');
+    expect(Addon::find('selfdep'))->toBeNull();
+});

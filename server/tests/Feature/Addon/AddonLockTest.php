@@ -55,3 +55,25 @@ it('不同插件操作互不阻塞', function () {
     expect(Addon::find('lockc'))->not->toBeNull();
     $lock->release();
 });
+
+it('AUDIT-A11 六个生命周期入口全部受锁保护', function (string $method, array $args) {
+    make_addon_dir('lockz');
+    $lock = Cache::lock('arkadmin:addon:lockz', 60);
+    expect($lock->get())->toBeTrue();
+
+    try {
+        app(AddonInstaller::class)->{$method}('lockz', ...$args);
+        $this->fail('应当拒绝');
+    } catch (AddonException $e) {
+        expect($e->getMessage())->toContain('另一操作');
+    } finally {
+        $lock->release();
+    }
+})->with([
+    'install 入口' => ['install', []],
+    'uninstall 入口' => ['uninstall', []],
+    'enable 入口' => ['enable', []],
+    'disable 入口' => ['disable', []],
+    'upgrade 入口' => ['upgrade', [false]],
+    'refresh 入口' => ['refreshMenusAndPermissions', []],
+]);

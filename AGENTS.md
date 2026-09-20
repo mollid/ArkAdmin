@@ -2,7 +2,7 @@
 
 ## 工作区定位
 
-本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 13 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架：docker 环境、登录/RBAC/菜单接口、前端 SPA 三大系统管理页面；M2 插件系统核心：引导、生命周期、CLI、菜单注入、编译缓存；M3 前端同步：插件前端复制/删除、组件缺失兜底、i18n 命名空间合并、Vitest；M4 框架级素材库 + 首个业务插件 CMS：栏目树/富文本文章/封面标签；M5 `ark:crud` 一键 CRUD 生成器；M6 插件 harness：Widget/Settings/操作日志埋点三扩展点 + settings/op_logs 两系统插件，终态规格见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`），设计文档与两个只读参考仓库并存。
+本工作区是 **ArkAdmin（方舟）** 项目的家：一个基于 Laravel 重写 FastAdmin 的插件化后台框架（Laravel 13 + PHP 8.3 + PostgreSQL + Vue3/Element Plus 前后端分离 + NiuShop 式目录插件机制）。框架代码已创建（M1 骨架：docker 环境、登录/RBAC/菜单接口、前端 SPA 三大系统管理页面；M2 插件系统核心：引导、生命周期、CLI、菜单注入、编译缓存；M3 前端同步：插件前端复制/删除、组件缺失兜底、i18n 命名空间合并、Vitest；M4 框架级素材库 + 首个业务插件 CMS：栏目树/富文本文章/封面标签；M5 `ark:crud` 一键 CRUD 生成器；M6 插件 harness：Widget/Settings/操作日志埋点三扩展点 + settings/op_logs 两系统插件；M7 机制完整化：插件管理界面、upgrade 升级链、依赖拓扑、ark:sync；M8 正确性打磨：全栈审计（31 条核实）与修复轮，终态规格见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`，各里程碑验收记录见 `docs/superpowers/plans/`），设计文档与两个只读参考仓库并存。
 
 ```
 /home/gdmax/fastadmin/            # 工作区根（git 仓库根）
@@ -28,8 +28,8 @@
 - 超管账号：admin / 123456（开发环境种子数据）
 - 首次部署/换机：执行一次 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan storage:link"`（素材库图片经 `APP_URL/storage/...` 访问，nginx 直读该软链；dev `APP_URL=http://localhost:8080`）
 - **升级/新增框架权限后**：跑一次 `php artisan ark:sync`（幂等；与 `db:seed` 等价且多一步框架缓存重建，也可用 `ark:sync --no-addons` 只同步权限菜单）——漏跑会出现「接口能用但前端按钮消失」（超管有 Gate 旁路，前端 `v-permission` 按 `/auth/me` 权限串判断，拿不到串即移除按钮），刷新浏览器后生效
-- 插件 CLI（前缀同上 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan ..."`）：`addon:list` / `addon:install {name}` / `addon:uninstall {name} [--keep-data]` / `addon:enable {name}` / `addon:disable {name}` / `addon:upgrade {name} [--all] [--force]` / `addon:cache` / `addon:clear` / `ark:sync [--no-addons]`
-- **插件升级（M7）**：插件新版本带新增迁移时，`addon:install` 会因「已安装」拒绝、`enable` 不跑迁移——必须走 `addon:upgrade {name}`（磁盘版本 > 注册表版本时执行：跑新增迁移 → `upgrade(旧版本)` 钩子 → 补菜单/权限 → 前端同步 → 写回版本）。忘了 bump version 时用 `--force` 补跑迁移；`--all` 扫描全部已装插件。升级后需 `cd admin && npm run build` 重建后台（HTTP 界面的升级按钮同样返回构建提示）。系统插件 `settings`/`op_logs` 在 HTTP 界面禁止停用/卸载（CLI 不受限）
+- 插件 CLI（前缀同上 `docker compose -f docker/docker-compose.yml exec -u 1000:1000 php sh -c "cd /var/www/server && php artisan ..."`）：`addon:list` / `addon:install {name}` / `addon:uninstall {name} [--keep-data]` / `addon:enable {name}` / `addon:disable {name}` / `addon:upgrade {name} [--all] [--force]` / `addon:cache` / `addon:clear` / `ark:sync [--no-addons]`。**生命周期操作同插件互斥**（并发触发得「正在被另一操作处理，请稍后再试」，3s 快速失败）
+- **插件升级（M7）**：插件新版本带新增迁移时，`addon:install` 会因「已安装」拒绝、`enable` 不跑迁移——必须走 `addon:upgrade {name}`（磁盘版本 > 注册表版本时执行：跑新增迁移 → `upgrade(旧版本)` 钩子 → 补菜单/权限 → 前端同步 → 写回版本）。忘了 bump version 时用 `--force` 补跑迁移；`--all` 扫描全部已装插件。升级后需 `cd admin && npm run build` 重建后台（HTTP 界面的升级按钮同样返回构建提示）。系统插件 `settings`/`op_logs` 在 HTTP 界面禁止停用/卸载（CLI 不受限）；M8 起 `--all` 批量中单插件失败不中止整批，单名指向磁盘缺失插件时显式报错返回失败（不再「跳过」）
 - CRUD 生成器：`php artisan ark:crud --table=cms_xxx [--addon=cms] [--force]`——对既有表生成迁移外全套模块（Model/Service/Controller/Requests + 路由/菜单/权限/前端），表名须以插件前缀开头；目标插件 `database/menus.php` 根菜单 children 内需一次性植入 `// ark:crud:menus:start/end` 标记对；追加类内容以 per-table 标记对幂等替换，重复生成加 `--force`
 - 系统插件（M6 harness）：`settings`（设置管理页）/`op_logs`（操作日志），随 `db:seed` 幂等自动安装（`config('arkadmin.system_addons')`）；插件可声明 `database/widgets.php`（仪表盘卡片）与 `database/settings.php`（设置 schema）；日志清理 `php artisan op-logs:prune [--days=90]`；扩展点细节见 `docs/superpowers/specs/2026-09-17-arkadmin-harness.md`
 
